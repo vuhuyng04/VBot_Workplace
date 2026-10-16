@@ -7,6 +7,7 @@ import contextlib
 import datetime as dt
 import decimal
 import json
+import time
 import uuid
 
 from .aws import client
@@ -63,12 +64,30 @@ class Tx:
         return rows[0] if rows else None
 
 
+class DatabaseWaking(RuntimeError):
+    """Aurora Serverless v2 is resuming from auto-pause (0 ACU); the API maps this to 503 + Retry-After."""
+
+
+def _begin(rds, s, wait_s: float = 25.0) -> str:
+    """BeginTransaction, waiting while an auto-paused cluster resumes (typically ~15 s)."""
+    deadline = time.monotonic() + wait_s
+    delay = 1.0
+    while True:
+        try:
+            return rds.begin_transaction(resourceArn=s.db_cluster_arn, secretArn=s.db_app_secret_arn, database=s.db_name)["transactionId"]
+        except rds.exceptions.DatabaseResumingException as e:
+            if time.monotonic() + delay > deadline:
+                raise DatabaseWaking("Cơ sở dữ liệu đang khởi động lại sau thời gian nghỉ, vui lòng thử lại sau vài giây.") from e
+            time.sleep(delay)
+            delay = min(delay * 1.6, 5.0)
+
+
 @contextlib.contextmanager
 def user_tx(user_id: str):
     """Transaction bound to one user: RLS sees app.user_id for every statement inside."""
     s = settings()
     rds = client("rds-data")
-    tx_id = rds.begin_transaction(resourceArn=s.db_cluster_arn, secretArn=s.db_app_secret_arn, database=s.db_name)["transactionId"]
+    tx_id = _begin(rds, s)
     tx = Tx(tx_id)
     try:
         tx.run("SELECT set_config('app.user_id', :uid, true)", uid=user_id)

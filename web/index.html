@@ -60,13 +60,14 @@
 <main id="app" class="hidden">
   <div class="wrap">
     <section id="tab-chat" class="tab chat-layout">
-      <aside class="convs">
-        <div class="convs-head"><h3>Hội thoại</h3><button id="btnNew" class="btn sm" type="button">Mới <span class="chev">›</span></button></div>
+      <aside class="convs" aria-label="Hội thoại">
+        <div class="convs-head"><h3>Hội thoại</h3><button id="btnNew" class="btn sm" type="button" title="Hội thoại mới (Ctrl+K)">+ Mới</button></div>
         <ul id="convList"></ul>
       </aside>
       <div class="chat-main">
+        <div class="chat-top"><button id="btnConvs" class="btn sm" type="button">☰ Hội thoại</button></div>
         <div id="banner" class="banner hidden" role="status"></div>
-        <div id="messages" class="messages">
+        <div id="messages" class="messages" aria-live="polite">
           <div class="empty" id="emptyChat">
             <h2>Hôm nay VBot giúp gì cho bạn?</h2>
             <div class="chips">
@@ -78,7 +79,7 @@
           </div>
         </div>
         <form id="chatForm" class="composer">
-          <textarea id="prompt" rows="2" placeholder="Hỏi VBot… (Enter để gửi, Shift+Enter xuống dòng)" aria-label="Câu hỏi"></textarea>
+          <textarea id="prompt" rows="1" placeholder="Hỏi VBot về email, tài liệu, dữ liệu, code hay dự án…" aria-label="Câu hỏi"></textarea>
           <div class="composer-bar">
             <select id="mode" title="Cấp tác vụ" aria-label="Cấp tác vụ">
               <option value="">Tự chọn cấp tác vụ</option>
@@ -89,7 +90,9 @@
               <option value="t5">Cấp 5 · thiết kế</option>
             </select>
             <label class="chk"><input type="checkbox" id="useRag" checked> Dùng tài liệu của tôi</label>
+            <span class="hint">Enter gửi · Shift+Enter xuống dòng · Ctrl+K hội thoại mới</span>
             <span class="spacer"></span>
+            <button class="btn danger hidden" id="btnStop" type="button">■ Dừng</button>
             <button class="btn pri" id="btnSend">Gửi <span class="chev">›</span></button>
           </div>
         </form>
@@ -99,7 +102,9 @@
     <section id="tab-files" class="tab hidden">
       <div class="sec-head"><h2>Workspace riêng</h2></div>
       <p class="lede">Chỉ bạn và agent của bạn đọc được. Quota 10 GB. File được index để tìm kiếm theo quyền của bạn.</p>
-      <label class="drop" id="drop"><input type="file" id="fileInput" multiple><b>Chọn hoặc kéo thả file</b><span>txt, md, csv, docx, xlsx, pptx, pdf · tối đa 50 MB</span></label>
+      <label class="drop" id="drop"><input type="file" id="fileInput" multiple><b>⬆ Chọn hoặc kéo thả file</b><span>txt, md, csv, docx, xlsx, pptx, pdf · tối đa 50 MB mỗi file</span></label>
+      <div id="uploads" class="uploads" aria-live="polite"></div>
+      <div class="toolbar"><input type="text" id="fileSearch" placeholder="Tìm file…" aria-label="Tìm file"><span id="fileCount" class="muted small"></span></div>
       <div class="tablewrap"><table class="tbl"><thead><tr><th>Tên</th><th>Nguồn</th><th class="n">Chunk</th><th>Ngày</th><th></th></tr></thead><tbody id="fileRows"></tbody></table></div>
     </section>
 
@@ -115,13 +120,13 @@ df = pd.DataFrame({"thang": ["T1", "T2", "T3"], "doanh_thu": [120, 135, 160]})
 df["tang_truong_%"] = df["doanh_thu"].pct_change().mul(100).round(1)
 print(df)
 df.to_excel(os.path.join(os.environ["OUTPUT_DIR"], "bao_cao.xlsx"), index=False)</textarea>
-          <div class="row"><button class="btn pri" id="btnRun" type="button">Chạy <span class="chev">›</span></button></div>
+          <div class="row"><button class="btn pri" id="btnRun" type="button">▶ Chạy</button><span class="hint">Ctrl+Enter để chạy · tối đa 90 giây, không có mạng</span></div>
         </div>
         <div class="panel">
           <h3>File đầu vào</h3>
-          <select id="sbFiles" multiple size="6" aria-label="File đầu vào"></select>
+          <div id="sbFiles" class="optlist" aria-label="File đầu vào"></div>
           <h3>Kết quả</h3>
-          <pre id="sbOut" class="out"></pre>
+          <div id="sbOut" class="out"><span class="muted">Kết quả sẽ hiện ở đây.</span></div>
         </div>
       </div>
     </section>
@@ -143,7 +148,7 @@ df.to_excel(os.path.join(os.environ["OUTPUT_DIR"], "bao_cao.xlsx"), index=False)
         <textarea id="imgPrompt" rows="3" placeholder="Ảnh minh họa tối giản cho slide về chuyển đổi số, tông xanh navy" aria-label="Mô tả ảnh"></textarea>
         <div class="row"><button class="btn pri" id="btnImg" type="button">Tạo ảnh <span class="chev">›</span></button></div>
       </div>
-      <div id="imgOut"></div>
+      <div id="imgOut" class="gallery"></div>
     </section>
 
     <section id="tab-usage" class="tab hidden">
@@ -162,6 +167,7 @@ df.to_excel(os.path.join(os.environ["OUTPUT_DIR"], "bao_cao.xlsx"), index=False)
 <footer class="foot">
   <div class="wrap foot-in"><span><b>VBOT</b> WORKPLACE · Production Capstone · AI20k Track 2</span><span>Dữ liệu ở us-east-1 · không dùng để huấn luyện model</span></div>
 </footer>
+<div id="toasts" class="toasts" aria-live="polite"></div>
 <script src="/assets/app.js?v=__BUILD__"></script>
 </body>
 </html>

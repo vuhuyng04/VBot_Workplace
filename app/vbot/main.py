@@ -16,9 +16,14 @@ from . import governance, images, llm, quota, rag
 from .auth import User, current_user
 from .aws import client
 from .config import settings
-from .db import user_tx
+from .db import DatabaseWaking, user_tx
 
 app = FastAPI(title="VBot", docs_url=None, redoc_url=None)
+
+
+@app.exception_handler(DatabaseWaking)
+def _db_waking(_req, exc):
+    return JSONResponse({"detail": str(exc), "retry": True}, status_code=503, headers={"Retry-After": "5"})
 HERE = pathlib.Path(__file__).parent
 WEB = HERE / "web"
 STARTED = time.time()
