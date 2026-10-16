@@ -117,8 +117,10 @@ module "backup_dr" {
 }
 
 module "cicd" {
-  source       = "../../modules/cicd"
-  name         = var.name
-  github_repo  = var.github_repo
-  state_bucket = "vbot-tfstate-231143200719"
+  source      = "../../modules/cicd"
+  name        = var.name
+  github_repo = var.github_repo
+  # gh api repos/<repo>/actions/oidc/customization/sub -> sub_claim_prefix
+  github_sub_prefix = "repo:vuhuyng04@191273751/VBot_Workplace@1421606247"
+  state_bucket      = "vbot-tfstate-231143200719"
 }

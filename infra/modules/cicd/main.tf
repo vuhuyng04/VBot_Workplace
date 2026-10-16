@@ -11,6 +11,10 @@ variable "environment" {
   default = "production"
 }
 variable "state_bucket" { type = string }
+variable "github_sub_prefix" {
+  description = "OIDC sub prefix; GitHub issues immutable subjects (owner@id/repo@id) for this repo"
+  type        = string
+}
 
 data "aws_caller_identity" "me" {}
 
@@ -35,7 +39,7 @@ data "aws_iam_policy_document" "trust_deploy" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:environment:${var.environment}"]
+      values   = ["${var.github_sub_prefix}:environment:${var.environment}"]
     }
   }
 }
@@ -70,7 +74,7 @@ data "aws_iam_policy_document" "trust_plan" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:pull_request", "repo:${var.github_repo}:ref:refs/heads/main"]
+      values   = ["${var.github_sub_prefix}:pull_request", "${var.github_sub_prefix}:ref:refs/heads/main"]
     }
   }
 }
