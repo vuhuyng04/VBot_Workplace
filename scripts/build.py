@@ -41,7 +41,7 @@ def build_app():
     shutil.copytree(ROOT / "app" / "vbot", b / "vbot", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / "web", b / "vbot" / "web")
     import hashlib  # cache-busting: asset URLs change whenever their content changes
-    h = hashlib.md5(usedforsecurity=False, data=b"".join((ROOT / "web" / "assets" / f).read_bytes() for f in ("app.js", "style.css"))).hexdigest()[:10]
+    h = hashlib.md5(b"".join((ROOT / "web" / "assets" / f).read_bytes() for f in ("app.js", "style.css")), usedforsecurity=False).hexdigest()[:10]
     idx = b / "vbot" / "web" / "index.html"
     idx.write_text(idx.read_text(encoding="utf-8").replace("__BUILD__", h), encoding="utf-8")
     shutil.copytree(ROOT / "app" / "migrations", b / "migrations")
