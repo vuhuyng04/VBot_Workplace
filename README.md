@@ -27,21 +27,22 @@ Vận hành: CloudWatch alarms + dashboard, SNS email, Budget $50, anomaly monit
 Bản prod trong báo giá dùng cùng các thành phần đó, cộng thêm ALB + ECS Fargate + NAT + WAF + CloudFront. Các phần này đã có module Terraform (`infra/modules/lb`, `edge`) và bật bằng `demo_mode` / `edge_enabled`.
 
 ## Trạng thái kiểm thử E2E (`python scripts/e2e.py`, kết quả ghi ở `docs/e2e-results.json`)
-19/21 check đạt ở lần chạy gần nhất (trước khi có check RBAC của trang Quản trị, nay tổng cộng 22 check):
+**25/25 check đạt** (2026-10-16, model chạy qua Claude API vì Bedrock còn bị chặn):
 - SSO + MFA, chặn request thiếu token hoặc token giả.
 - Upload, index, RAG.
 - Cô lập A/B: danh sách file, tải file, ingest, kết quả tìm kiếm.
 - Tài liệu chứa prompt injection bị cách ly.
 - Sandbox: chạy pandas, xuất XLSX, không có AWS credential, không ra được Internet hay metadata endpoint, có timeout.
+- Chat stream qua SSE, định tuyến cấp 1 → Haiku 5.5, RAG lấy đúng tài liệu của người hỏi, TTFT dưới 3 s.
+- Agent: lập kế hoạch, chờ người dùng xác nhận, người khác không duyệt hộ được, thực hiện xong thì báo lại.
 - Ghi sổ chi phí theo user.
-
-2 check còn lỗi đều cần gọi được LLM (chat và bước lập kế hoạch của agent).
+- RBAC: user thường bị từ chối ở mọi API quản trị.
 
 ## Việc chặn bên phía AWS (cần chủ account xử lý)
 1. **Bedrock:** mọi model trả `NOT_AUTHORIZED / Operation not allowed`. Cần mở case AWS Support (Account and billing) xin verify account, và gửi form use-case Anthropic trong Bedrock → Model access.
 2. **CloudFront:** báo "account must be verified". Sau khi được verify thì đặt `edge_enabled = true`.
 
-Cách tạm thời: đặt `llm_provider = "anthropic"` và `anthropic_api_key = "..."` trong `terraform.tfvars` (key lưu trong Secrets Manager), rồi plan/apply.
+**Đang chạy tạm bằng Claude API:** `llm_provider = auto` nên app thử Bedrock trước. Khi bị từ chối, app chuyển sang Claude API và bỏ qua Bedrock vài phút. Key nằm trong GitHub secret `ANTHROPIC_API_KEY` (Terraform cất vào Secrets Manager), workspace nằm trong GitHub variable `ANTHROPIC_WORKSPACE_ID` (cần cho key cấp user `sk-ant-usr-…`). Khi Bedrock được mở, app tự quay lại Bedrock, không cần deploy. Riêng embedding (Titan) và Stable Image vẫn cần Bedrock: tới lúc đó tìm tài liệu chỉ theo chữ, còn tạo hình dùng SVG do Claude vẽ.
 
 ## Tài khoản và phân quyền
 Không cho tự đăng ký. Tài khoản đầu tiên tạo bằng `scripts/add_user.py email phongban --admin` (nhóm `platform_admin`). Từ đó quản trị qua tab **Quản trị** trên web:

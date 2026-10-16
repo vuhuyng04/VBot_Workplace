@@ -1,5 +1,5 @@
 {
- "ran_at": "2026-10-16T11:58:21+0700",
+ "ran_at": "2026-10-16T22:53:23+0700",
  "url": "https://s4cxct67qimymr2nezhjem7i6q0dwwum.lambda-url.us-east-1.on.aws",
  "results": [
   {
@@ -35,7 +35,7 @@
   {
    "check": "H3: user A sees own file",
    "pass": true,
-   "detail": "[{\"id\":\"8a28e0b5-0045-47e6-aac9-f792d54bb6d9\",\"title\":\"du-an-phuong-hoang.txt\",\"source\":\"upload\",\"created_at\":\"2026-10-1"
+   "detail": "[{\"id\":\"384c30a8-e557-4e05-87d7-7060cdc76f38\",\"title\":\"du-an-phuong-hoang.txt\",\"source\":\"upload\",\"created_at\":\"2026-10-1"
   },
   {
    "check": "H3: user B does not see A's file list",
@@ -63,9 +63,14 @@
    "detail": "['du-an-phuong-hoang.txt']"
   },
   {
-   "check": "LLM: model call (Bedrock access pending → explicit error to user)",
-   "pass": false,
-   "detail": "Bedrock từ chối: ValidationException: An error occurred (ValidationException) when calling the ConverseStream operation: Operation not allowed"
+   "check": "LLM: answer streamed with token + USD metering",
+   "pass": true,
+   "detail": "usd=0.000222 ttft=0.96s"
+  },
+  {
+   "check": "H6: TTFT under 3 s",
+   "pass": true,
+   "detail": "0.96s"
   },
   {
    "check": "H3: B's search never returns A's document",
@@ -98,14 +103,29 @@
    "detail": ""
   },
   {
-   "check": "Agent: plan step (needs model access)",
-   "pass": false,
-   "detail": "status=failed: {\"errorMessage\":\"Bedrock từ chối: ValidationException: An error occurred (ValidationException) when calling the ConverseStream operation: Operation not allowed\""
+   "check": "H4: agent waits for user confirmation before writing",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "H3: user B cannot approve A's agent run",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Agent: executes after approval and notifies",
+   "pass": true,
+   "detail": "Hoàn tất 15:53 UTC. create_ticket: [Cổng tuyển dụng] Thiết kế UI/UX và chốt yêu cầu; create_ticket: [Cổng tuyển dụng] Ba"
   },
   {
    "check": "H8: per-user metering ledger",
    "pass": true,
-   "detail": "18 requests, 0.02174 USD"
+   "detail": "24 requests, 0.048139 USD"
+  },
+  {
+   "check": "RBAC: plain user is refused by every admin endpoint",
+   "pass": true,
+   "detail": "[403, 403, 403]"
   }
  ]
 }
