@@ -4,104 +4,164 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VBot Workplace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="/assets/style.css?v=__BUILD__">
 </head>
 <body>
-<div id="login" class="login hidden">
-  <div class="login-card">
-    <div class="logo">VBot<span>/</span>Workplace</div>
-    <p>Trợ lý AI nội bộ. Đăng nhập bằng tài khoản tập đoàn (SSO + MFA).</p>
-    <button id="btnLogin" class="btn pri">Đăng nhập</button>
-    <a href="#/minh-bach" class="muted small" id="lnkPublic">Xem kiến trúc và chi phí (công khai)</a>
+<div class="topbar">
+  <div class="wrap topbar-in">
+    <span class="env">AI Workplace · <b id="envName">MVP</b></span>
+    <span class="spacer"></span>
+    <a href="#/minh-bach" class="toplink">Kiến trúc &amp; chi phí</a>
+    <span class="sep"></span>
+    <span id="meEmail" class="toplink user"></span>
+    <button id="btnLogout" class="toplink btn-link user" type="button">Đăng xuất</button>
   </div>
 </div>
 
-<div id="app" class="shell hidden">
-  <aside class="side">
-    <div class="logo">VBot<span>/</span>Workplace</div>
-    <nav class="tabs">
+<header class="mainbar">
+  <div class="wrap mainbar-in">
+    <a href="#/chat" class="brand" aria-label="VBot Workplace">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="word"><b>VBOT</b>WORKPLACE</span>
+    </a>
+    <nav class="tabs" aria-label="Chức năng">
       <a href="#/chat" data-tab="chat">Chat</a>
       <a href="#/files" data-tab="files">Workspace</a>
-      <a href="#/sandbox" data-tab="sandbox">Sandbox code</a>
+      <a href="#/sandbox" data-tab="sandbox">Sandbox</a>
       <a href="#/agent" data-tab="agent">Agent dự án</a>
-      <a href="#/image" data-tab="image">Thiết kế ảnh</a>
+      <a href="#/image" data-tab="image">Thiết kế</a>
       <a href="#/usage" data-tab="usage">Chi phí của tôi</a>
-      <a href="#/minh-bach" data-tab="minh-bach">Kiến trúc & chi phí</a>
     </nav>
-    <div class="convs">
-      <div class="convs-head"><span>Hội thoại</span><button id="btnNew" class="btn sm">Mới</button></div>
-      <ul id="convList"></ul>
-    </div>
-    <div class="me"><span id="meEmail"></span><button id="btnLogout" class="btn sm ghost">Đăng xuất</button></div>
-  </aside>
+  </div>
+</header>
 
-  <main class="main">
-    <section id="tab-chat" class="tab">
-      <div id="banner" class="banner hidden"></div>
-      <div id="messages" class="messages"></div>
-      <form id="chatForm" class="composer">
-        <select id="mode" title="Cấp tác vụ">
-          <option value="">Tự động chọn cấp</option>
-          <option value="t1">Cấp 1 · email, hỏi đáp</option>
-          <option value="t2">Cấp 2 · tài liệu</option>
-          <option value="t3">Cấp 3 · dữ liệu, code</option>
-          <option value="t4">Cấp 4 · dự án</option>
-          <option value="t5">Cấp 5 · thiết kế</option>
-        </select>
-        <textarea id="prompt" rows="2" placeholder="Hỏi VBot… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
-        <label class="chk"><input type="checkbox" id="useRag" checked> Dùng tài liệu của tôi</label>
-        <button class="btn pri" id="btnSend">Gửi</button>
-      </form>
+<section id="login" class="hero hidden">
+  <div class="wrap hero-in">
+    <div class="hero-card">
+      <h1>Trợ lý AI<br>cho công việc văn phòng</h1>
+      <p>Email, tài liệu, dữ liệu, code và dự án trong một workspace riêng của bạn. Đăng nhập bằng tài khoản tập đoàn (SSO + MFA).</p>
+      <div class="row">
+        <button id="btnLogin" class="btn light" type="button">Đăng nhập <span class="chev">›</span></button>
+        <a href="#/minh-bach" class="btn ghost-light">Xem kiến trúc &amp; chi phí <span class="chev">›</span></a>
+      </div>
+    </div>
+    <ul class="hero-facts">
+      <li><b>5 cấp</b><span>tác vụ, từ email tới agent dự án</span></li>
+      <li><b>Workspace riêng</b><span>người khác và agent của họ không đọc được</span></li>
+      <li><b>Sandbox</b><span>code chạy trong microVM, không có mạng</span></li>
+      <li><b>Minh bạch</b><span>mỗi câu trả lời hiện model, token và USD</span></li>
+    </ul>
+  </div>
+</section>
+
+<main id="app" class="hidden">
+  <div class="wrap">
+    <section id="tab-chat" class="tab chat-layout">
+      <aside class="convs">
+        <div class="convs-head"><h3>Hội thoại</h3><button id="btnNew" class="btn sm" type="button">Mới <span class="chev">›</span></button></div>
+        <ul id="convList"></ul>
+      </aside>
+      <div class="chat-main">
+        <div id="banner" class="banner hidden" role="status"></div>
+        <div id="messages" class="messages">
+          <div class="empty" id="emptyChat">
+            <h2>Hôm nay VBot giúp gì cho bạn?</h2>
+            <div class="chips">
+              <button type="button" data-q="Tóm tắt các điểm chính trong tài liệu tôi vừa tải lên">Tóm tắt tài liệu</button>
+              <button type="button" data-q="Soạn email trả lời khách hàng xin lùi lịch họp sang thứ Sáu">Soạn email</button>
+              <button type="button" data-q="Viết báo cáo tiến độ dự án tuần này theo mẫu: kết quả, vướng mắc, kế hoạch">Viết báo cáo</button>
+              <button type="button" data-q="Viết script Python đọc file Excel và tính tổng doanh thu theo tháng">Viết code</button>
+            </div>
+          </div>
+        </div>
+        <form id="chatForm" class="composer">
+          <textarea id="prompt" rows="2" placeholder="Hỏi VBot… (Enter để gửi, Shift+Enter xuống dòng)" aria-label="Câu hỏi"></textarea>
+          <div class="composer-bar">
+            <select id="mode" title="Cấp tác vụ" aria-label="Cấp tác vụ">
+              <option value="">Tự chọn cấp tác vụ</option>
+              <option value="t1">Cấp 1 · email, hỏi đáp</option>
+              <option value="t2">Cấp 2 · tài liệu</option>
+              <option value="t3">Cấp 3 · dữ liệu, code</option>
+              <option value="t4">Cấp 4 · dự án</option>
+              <option value="t5">Cấp 5 · thiết kế</option>
+            </select>
+            <label class="chk"><input type="checkbox" id="useRag" checked> Dùng tài liệu của tôi</label>
+            <span class="spacer"></span>
+            <button class="btn pri" id="btnSend">Gửi <span class="chev">›</span></button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <section id="tab-files" class="tab hidden">
-      <h2>Workspace riêng</h2>
-      <p class="muted">Chỉ bạn và agent của bạn đọc được. Quota 10 GB. File được index để tìm kiếm theo quyền của bạn.</p>
-      <div class="drop" id="drop"><input type="file" id="fileInput" multiple><span>Chọn hoặc kéo thả file (txt, md, csv, docx, xlsx, pptx, pdf)</span></div>
-      <table class="tbl"><thead><tr><th>Tên</th><th>Nguồn</th><th>Chunk</th><th>Ngày</th><th></th></tr></thead><tbody id="fileRows"></tbody></table>
+      <div class="sec-head"><h2>Workspace riêng</h2></div>
+      <p class="lede">Chỉ bạn và agent của bạn đọc được. Quota 10 GB. File được index để tìm kiếm theo quyền của bạn.</p>
+      <label class="drop" id="drop"><input type="file" id="fileInput" multiple><b>Chọn hoặc kéo thả file</b><span>txt, md, csv, docx, xlsx, pptx, pdf · tối đa 50 MB</span></label>
+      <div class="tablewrap"><table class="tbl"><thead><tr><th>Tên</th><th>Nguồn</th><th class="n">Chunk</th><th>Ngày</th><th></th></tr></thead><tbody id="fileRows"></tbody></table></div>
     </section>
 
     <section id="tab-sandbox" class="tab hidden">
-      <h2>Sandbox chạy code</h2>
-      <p class="muted">Python chạy trong microVM riêng, không có mạng, chỉ thấy file bạn chọn. File ghi vào <code>OUTPUT_DIR</code> được lưu về workspace.</p>
-      <div class="row"><label>File đầu vào:</label><select id="sbFiles" multiple size="4"></select></div>
-      <textarea id="sbCode" class="code" rows="14">import os, pandas as pd
+      <div class="sec-head"><h2>Sandbox chạy code</h2></div>
+      <p class="lede">Python chạy trong microVM riêng, không có mạng, chỉ thấy file bạn chọn. File ghi vào <code>OUTPUT_DIR</code> được lưu về workspace.</p>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Mã Python</h3>
+          <textarea id="sbCode" class="code" rows="14" aria-label="Mã Python">import os, pandas as pd
 # File đầu vào nằm trong thư mục làm việc hiện tại; ghi kết quả vào OUTPUT_DIR
 df = pd.DataFrame({"thang": ["T1", "T2", "T3"], "doanh_thu": [120, 135, 160]})
 df["tang_truong_%"] = df["doanh_thu"].pct_change().mul(100).round(1)
 print(df)
 df.to_excel(os.path.join(os.environ["OUTPUT_DIR"], "bao_cao.xlsx"), index=False)</textarea>
-      <button class="btn pri" id="btnRun">Chạy</button>
-      <pre id="sbOut" class="out"></pre>
+          <div class="row"><button class="btn pri" id="btnRun" type="button">Chạy <span class="chev">›</span></button></div>
+        </div>
+        <div class="panel">
+          <h3>File đầu vào</h3>
+          <select id="sbFiles" multiple size="6" aria-label="File đầu vào"></select>
+          <h3>Kết quả</h3>
+          <pre id="sbOut" class="out"></pre>
+        </div>
+      </div>
     </section>
 
     <section id="tab-agent" class="tab hidden">
-      <h2>Agent dự án (chạy nền)</h2>
-      <p class="muted">Agent lập kế hoạch, <b>chờ bạn xác nhận</b> trước mọi hành động ghi (tạo ticket, cập nhật trang), rồi chạy và báo kết quả.</p>
-      <textarea id="agGoal" rows="3" placeholder="Ví dụ: Lập kế hoạch sprint 2 tuần cho việc ra mắt cổng tuyển dụng nội bộ, tạo ticket cho từng hạng mục"></textarea>
-      <button class="btn pri" id="btnAgent">Giao việc</button>
+      <div class="sec-head"><h2>Agent dự án</h2></div>
+      <p class="lede">Agent chạy nền: lập kế hoạch, <b>chờ bạn xác nhận</b> trước mọi hành động ghi (tạo ticket, cập nhật trang), rồi thực hiện và báo kết quả.</p>
+      <div class="panel">
+        <textarea id="agGoal" rows="3" placeholder="Ví dụ: Lập kế hoạch sprint 2 tuần cho việc ra mắt cổng tuyển dụng nội bộ, tạo ticket cho từng hạng mục" aria-label="Mục tiêu"></textarea>
+        <div class="row"><button class="btn pri" id="btnAgent" type="button">Giao việc <span class="chev">›</span></button></div>
+      </div>
       <div id="agRuns" class="cards"></div>
     </section>
 
     <section id="tab-image" class="tab hidden">
-      <h2>Thiết kế: ảnh minh họa</h2>
-      <p class="muted">Sơ đồ, mockup nên hỏi trong Chat (cấp 5) để VBot viết SVG/HTML, rẻ hơn ảnh. Ảnh dùng Stable Image Core ($0,04/ảnh).</p>
-      <textarea id="imgPrompt" rows="3" placeholder="Ảnh minh họa tối giản cho slide về chuyển đổi số, tông xanh dương"></textarea>
-      <button class="btn pri" id="btnImg">Tạo ảnh</button>
+      <div class="sec-head"><h2>Thiết kế</h2></div>
+      <p class="lede">Sơ đồ, mockup nên hỏi trong Chat (cấp 5) để VBot viết SVG/HTML, rẻ hơn ảnh. Ảnh minh họa dùng Stable Image Core ($0,04/ảnh).</p>
+      <div class="panel">
+        <textarea id="imgPrompt" rows="3" placeholder="Ảnh minh họa tối giản cho slide về chuyển đổi số, tông xanh navy" aria-label="Mô tả ảnh"></textarea>
+        <div class="row"><button class="btn pri" id="btnImg" type="button">Tạo ảnh <span class="chev">›</span></button></div>
+      </div>
       <div id="imgOut"></div>
     </section>
 
     <section id="tab-usage" class="tab hidden">
-      <h2>Chi phí của tôi</h2>
+      <div class="sec-head"><h2>Chi phí của tôi</h2></div>
       <div id="usageBox"></div>
     </section>
 
     <section id="tab-minh-bach" class="tab hidden">
-      <h2>Kiến trúc, tính năng và chi phí</h2>
+      <div class="sec-head"><h2>Kiến trúc, tính năng và chi phí</h2></div>
+      <p class="lede">Báo giá cho 2.000 người dùng mỗi ngày, tính từ giá niêm yết AWS, đặt cạnh chi phí thật của bản MVP đang chạy.</p>
       <div id="tpBox">Đang tải…</div>
     </section>
-  </main>
-</div>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in"><span><b>VBOT</b> WORKPLACE · Production Capstone · AI20k Track 2</span><span>Dữ liệu ở us-east-1 · không dùng để huấn luyện model</span></div>
+</footer>
 <script src="/assets/app.js?v=__BUILD__"></script>
 </body>
 </html>

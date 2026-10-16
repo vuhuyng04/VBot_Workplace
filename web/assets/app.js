@@ -55,11 +55,9 @@ function show(tab) {
 }
 function route() {
   const tab = (location.hash.match(/#\/([\w-]+)/) || [])[1] || "chat";
-  if (!TOKEN) {
-    if (tab === "minh-bach") { $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
-      document.querySelector(".side").classList.add("hidden"); $("#app").classList.add("public"); show(tab); return; }
-    $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); return;
-  }
+  document.body.classList.toggle("anon", !TOKEN);
+  if (!TOKEN && tab !== "minh-bach") { $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); return; }
+  $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   show(tab);
 }
 function alertBanner(msg, err) { const b = $("#banner"); b.textContent = msg; b.className = "banner" + (err ? " err" : ""); }
@@ -80,7 +78,10 @@ function metaHtml(m) {
   (m.quarantined || []).forEach(q => p.push(`<span class="pill warn" title="${esc((q.why || []).join(", "))}">⚠ đã loại: ${esc(q.title)}</span>`));
   return p.join("");
 }
+const EMPTY = $("#emptyChat");
+function resetChat() { $("#messages").innerHTML = ""; $("#messages").appendChild(EMPTY); EMPTY.classList.remove("hidden"); }
 function addMsg(role, text, meta) {
+  EMPTY.classList.add("hidden");
   const el = document.createElement("div");
   el.className = "msg " + role;
   el.innerHTML = `<div class="body">${esc(text)}</div>${role === "assistant" ? `<div class="meta">${metaHtml(meta || {})}</div>` : ""}`;
@@ -88,7 +89,7 @@ function addMsg(role, text, meta) {
   return el;
 }
 async function openConv(id) {
-  CONV = id; $("#messages").innerHTML = "";
+  CONV = id; resetChat();
   const rows = await api(`/api/conversations/${id}`);
   rows.forEach(m => addMsg(m.role, m.content, {model: m.model, input_tokens: m.input_tokens, output_tokens: m.output_tokens,
     usd: m.cost_usd != null ? Number(m.cost_usd) : null}));
@@ -208,20 +209,21 @@ async function loadTransparency() {
 /* ---------------- boot ---------------- */
 async function boot() {
   CFG = await (await fetch("/api/config")).json();
+  $("#envName").textContent = (CFG.env || "").toUpperCase();
   await handleCallback();
   const t = ss.get("id_token");
   TOKEN = t && tokenValid(t) ? t : null;
+  route();
   if (TOKEN) {
-    $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
-    try { const me = await api("/api/me"); $("#meEmail").textContent = me.email; } catch (e) { alertBanner(e.message, true); }
+    api("/api/me").then(me => { $("#meEmail").textContent = me.email; }).catch(e => alertBanner(e.message, true));
     loadConvs().catch(() => {});
   }
-  route();
 }
 window.addEventListener("hashchange", route);
 $("#btnLogin").onclick = login;
 $("#btnLogout").onclick = logout;
-$("#btnNew").onclick = () => { CONV = null; $("#messages").innerHTML = ""; location.hash = "#/chat"; loadConvs(); };
+$("#btnNew").onclick = () => { CONV = null; resetChat(); location.hash = "#/chat"; loadConvs(); };
+document.querySelector(".chips").onclick = e => { const q = e.target.dataset.q; if (q) { $("#prompt").value = q; $("#prompt").focus(); } };
 $("#convList").onclick = e => { const id = e.target.dataset.id; if (id) { location.hash = "#/chat"; openConv(id); } };
 $("#chatForm").onsubmit = send;
 $("#prompt").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#chatForm").requestSubmit(); } };

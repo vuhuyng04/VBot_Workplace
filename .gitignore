@@ -27,3 +27,4 @@ scripts/.e2e_users.json
 infra/envs/*/terraform.tfvars
 infra/**/plan.txt
 *.tfplan
+app/vbot/web/
