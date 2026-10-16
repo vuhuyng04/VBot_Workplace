@@ -1,9 +1,10 @@
 """Build Lambda zips for arm64 (Graviton) without Docker: pip downloads manylinux wheels.
 
-  dist/app.zip      FastAPI app + SPA + quote summary (API Lambda and agent-step Lambdas)
+  dist/app.zip      FastAPI app + SPA (Next.js export of frontend/) + quote summary (API Lambda and agent-step Lambdas)
   dist/sandbox.zip  code sandbox with pandas, openpyxl, matplotlib, docx, pptx
 Usage: .venv/Scripts/python scripts/build.py
 """
+import os
 import pathlib
 import shutil
 import subprocess
@@ -34,16 +35,21 @@ def zipdir(src: pathlib.Path, out: pathlib.Path, exec_files=("run.sh",)):
     print(f"{out.name}: {out.stat().st_size / 1e6:.1f} MB")
 
 
+def build_web() -> pathlib.Path:
+    """Next.js static export (frontend/out). Asset names are content-hashed, so no cache-busting step."""
+    web, npm = ROOT / "frontend", shutil.which("npm") or "npm"  # npm.cmd on Windows
+    if not (web / "node_modules").exists():
+        subprocess.run([npm, "ci", "--no-audit", "--no-fund"], cwd=web, check=True)
+    subprocess.run([npm, "run", "build"], cwd=web, check=True, env={**os.environ, "NEXT_TELEMETRY_DISABLED": "1"})
+    return web / "out"
+
+
 def build_app():
     b = BUILD / "app"
     shutil.rmtree(b, ignore_errors=True)
     pip_into(ROOT / "app" / "requirements.txt", b)
-    shutil.copytree(ROOT / "app" / "vbot", b / "vbot", ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copytree(ROOT / "web", b / "vbot" / "web")
-    import hashlib  # cache-busting: asset URLs change whenever their content changes
-    h = hashlib.md5(b"".join((ROOT / "web" / "assets" / f).read_bytes() for f in ("app.js", "style.css")), usedforsecurity=False).hexdigest()[:10]
-    idx = b / "vbot" / "web" / "index.html"
-    idx.write_text(idx.read_text(encoding="utf-8").replace("__BUILD__", h), encoding="utf-8")
+    shutil.copytree(ROOT / "app" / "vbot", b / "vbot", ignore=shutil.ignore_patterns("__pycache__", "web"))  # web: local copy, rebuilt below
+    shutil.copytree(build_web(), b / "vbot" / "web")
     shutil.copytree(ROOT / "app" / "migrations", b / "migrations")
     shutil.copy(ROOT / "quote" / "prices.json", b / "vbot" / "prices.json")
     shutil.copy(ROOT / "quote" / "out" / "summary.json", b / "vbot" / "quote_summary.json")

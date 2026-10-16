@@ -463,9 +463,19 @@ def agent_decision(run_id: uuid.UUID, body: DecisionIn, u: User = Depends(curren
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- SPA
-if WEB.exists():
-    app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
+# ---------------------------------------------------------------- SPA (Next.js static export from frontend/out)
+class ImmutableFiles(StaticFiles):
+    """/_next/static file names carry a content hash, so browsers may cache them forever."""
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        if r.status_code == 200:
+            r.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return r
+
+
+if (WEB / "index.html").exists():
+    if (WEB / "_next").exists():
+        app.mount("/_next", ImmutableFiles(directory=WEB / "_next"), name="next")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

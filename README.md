@@ -55,12 +55,14 @@ GitHub variables: `AWS_PLAN_ROLE_ARN`, `AWS_DEPLOY_ROLE_ARN`. Secret: `ALERT_EMA
 ## Vận hành (local)
 ```powershell
 $env:AWS_PROFILE = "root"; copy infra/envs/mvp/terraform.tfvars.example infra/envs/mvp/terraform.tfvars
-.venv/Scripts/python scripts/build.py            # build dist/app.zip + dist/sandbox.zip (arm64, không cần Docker)
+.venv/Scripts/python scripts/build.py            # build dist/app.zip + dist/sandbox.zip (arm64, không cần Docker; cần Node ≥ 20.9 để build UI)
 terraform -chdir=infra/envs/mvp plan -out=x.tfplan; terraform -chdir=infra/envs/mvp apply x.tfplan
 .venv/Scripts/python scripts/migrate.py          # schema + RLS (chạy lại được nhiều lần)
 .venv/Scripts/python scripts/add_user.py a@cty.vn phongban [--admin]
 .venv/Scripts/python scripts/e2e.py              # kiểm thử end-to-end
 ```
+**Giao diện (`frontend/`, Next.js):** `next build` xuất site tĩnh ra `frontend/out`, `build.py` đóng gói thư mục đó và FastAPI phục vụ cùng Lambda với `/api`. Sửa UI ở local: chạy API bằng uvicorn ở cổng 8000, sau đó `cd frontend; npm ci; npm run dev`. Dev server chuyển tiếp `/api` sang `VBOT_API` (mặc định `http://127.0.0.1:8000`).
+
 **Chi phí MVP khi nhàn rỗi:** khoảng $9/tháng (4 khóa KMS, 2 secret, alarm, dashboard, lưu trữ). Mọi phần khác trả theo request. Các thành phần tính phí theo giờ (NAT, ALB, Fargate, WAF) chỉ bật khi `demo_mode = true`.
 Credit còn lại khi bắt đầu: $189.49 (xem bằng `aws freetier get-account-plan-state`, cần CLI ≥ 2.27).
 Sau khoảng 24h, đặt `activate_cost_tags = true` để Cost Explorer tách chi phí theo tag `component` (trùng với mã component trong báo giá).
