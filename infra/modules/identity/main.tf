@@ -62,8 +62,28 @@ resource "aws_cognito_user_pool" "this" {
 }
 
 resource "aws_cognito_user_pool_domain" "this" {
-  domain       = "${var.name}-${data.aws_caller_identity.me.account_id}"
+  domain                = "${var.name}-${data.aws_caller_identity.me.account_id}"
+  user_pool_id          = aws_cognito_user_pool.this.id
+  managed_login_version = 2 # managed login (brandable); 1 = classic hosted UI
+}
+
+# VBot look for the managed login pages (sign-in, MFA setup and code, password reset).
+# branding/settings.json = Cognito defaults with the VBot palette; logo text is outlined so no web font is needed.
+resource "aws_cognito_managed_login_branding" "web" {
   user_pool_id = aws_cognito_user_pool.this.id
+  client_id    = aws_cognito_user_pool_client.web.id
+  settings     = jsonencode(jsondecode(file("${path.module}/branding/settings.json")))
+
+  dynamic "asset" {
+    for_each = { FORM_LOGO = "logo.svg", PAGE_BACKGROUND = "background.svg", FAVICON_SVG = "favicon.svg" }
+    content {
+      category   = asset.key
+      color_mode = "LIGHT"
+      extension  = "SVG"
+      bytes      = filebase64("${path.module}/branding/${asset.value}")
+    }
+  }
+  depends_on = [aws_cognito_user_pool_domain.this]
 }
 
 resource "aws_cognito_identity_provider" "google" {
