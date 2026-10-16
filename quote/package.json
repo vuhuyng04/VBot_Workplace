@@ -1,0 +1,7 @@
+{
+  "name": "vbot-quote-check",
+  "private": true,
+  "type": "module",
+  "scripts": { "check": "node check.mjs out/G03_baogia.xlsx" },
+  "dependencies": { "xlsx": "0.18.5" }
+}

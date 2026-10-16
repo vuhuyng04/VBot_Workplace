@@ -1,0 +1,107 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: lint + import smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff -r app/requirements.txt
+      - run: ruff check app sandbox scripts quote
+      - name: import smoke (router, app routes)
+        working-directory: app
+        env:
+          VBOT_CONFIG_JSON: '{"user_pool_id":"x","client_id":"y"}'
+        run: |
+          cp ../quote/prices.json vbot/prices.json
+          python -c "from vbot import main, llm, agent_steps; assert len(main.app.routes) > 15; assert llm.route('Tóm tắt email').model == 'haiku'; print('ok')"
+
+  quote:
+    name: quote builds and passes the capstone validator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install pyyaml openpyxl
+      - run: python quote/build_quote.py
+        env:
+          PYTHONIOENCODING: utf-8
+      - run: npm ci && node check.mjs out/G03_baogia.xlsx
+        working-directory: quote
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quote
+          path: quote/out/
+
+  terraform:
+    name: terraform fmt + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.4"
+      - run: terraform fmt -check -recursive infra
+      - name: validate (no backend)
+        working-directory: infra/envs/mvp
+        run: |
+          mkdir -p ../../../dist && touch ../../../dist/app.zip ../../../dist/sandbox.zip
+          terraform init -backend=false -input=false
+          terraform validate
+
+  plan:
+    name: terraform plan (read-only role)
+    needs: [python, quote, terraform]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: build artifacts
+        run: |
+          pip install pyyaml openpyxl
+          python quote/build_quote.py
+          python scripts/build.py
+        env:
+          PYTHONIOENCODING: utf-8
+      - name: plan
+        working-directory: infra/envs/mvp
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -lock=false -no-color -out=tf.plan | tee plan.txt
+          { echo '### Terraform plan'; echo '```'; grep -E '^Plan:|No changes|# .* (will|must) be' plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

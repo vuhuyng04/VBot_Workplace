@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (gitignored) for local runs. CI passes these as TF_VAR_* from GitHub secrets.
+aws_profile = "root"
+alert_email = "you@example.com"
+budget_usd  = 50
+demo_mode   = false

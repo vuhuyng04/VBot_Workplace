@@ -1,0 +1,130 @@
+# VBot Workplace: giả định sizing cho báo giá 2.000 DAU (prod + 1 staging).
+# Nguồn duy nhất cho XLSX, slide và trang Transparency. Sửa ở đây rồi chạy build_quote.py.
+
+team: G03
+region: us-east-1            # đủ dịch vụ: Claude 5.5 qua inference profile us.*, Stable Image, Titan Embed v2
+dr_region: us-west-2
+
+users:
+  dau: 2000                  # đề cho
+  mau: 2400                  # người dùng có đăng nhập trong tháng (DAU × 1,2)
+  workdays: 22               # đề cho
+  business_hours: 220        # 22 ngày × 10 giờ
+  month_hours: 730
+  peak_hour_share: 0.15      # 15% request trong ngày rơi vào giờ cao điểm
+
+# Mỗi cấp: request/người/ngày, số lượt gọi LLM mỗi request, token vào/ra mỗi lượt,
+# tỉ lệ input đọc từ prompt cache, tỉ lệ lượt route sang Haiku 5.5 (còn lại Sonnet 5.5).
+tiers:
+  t1_email_qa:   {name: "Cấp 1 email, hỏi đáp", req: 12,  steps: 1,  in: 3000, out: 350,  cached: 0.50, haiku: 0.90}
+  t2_docs:       {name: "Cấp 2 tài liệu, slide", req: 4,  steps: 2,  in: 5000, out: 1200, cached: 0.40, haiku: 0.75}
+  t3_data_code:  {name: "Cấp 3 dữ liệu, code",  req: 3,   steps: 4,  in: 6000, out: 800,  cached: 0.60, haiku: 0.50, sandbox_runs: 2}
+  t4_agent:      {name: "Cấp 4 agent dự án",    req: 0.5, steps: 10, in: 8000, out: 600,  cached: 0.70, haiku: 0.60, sandbox_runs: 1}
+  t5_design:     {name: "Cấp 5 thiết kế",       req: 0.3, steps: 1,  in: 3000, out: 1500, cached: 0.30, haiku: 0.00, images: 1.5}
+
+llm:
+  reference_model: "Claude Opus 5.5"     # model tham chiếu cho H8 (>=95% điểm)
+  cache_write_share: 0.05                # phần input ghi vào cache (giá cache write)
+  router_llm_share: 0.30                 # 30% request mơ hồ cần Haiku phân loại; còn lại rule-based
+  router_in: 400
+  router_out: 5
+  doc_export_runs_per_t2: 0.5            # nửa số request cấp 2 xuất DOCX/XLSX/PPTX qua sandbox
+  eval:                                  # cổng eval (staging): mỗi lần đổi model/prompt
+    runs_per_month: 2
+    cases: 1000
+    in: 4000
+    out: 800
+
+embedding:
+  docs_per_user: 500
+  chunks_per_doc: 8
+  tokens_per_chunk: 400
+  monthly_change: 0.10                   # 10% tài liệu đổi mỗi tháng -> re-embed (batch)
+  query_tokens: 60                       # mỗi request có RAG nhúng câu hỏi
+  rag_share: 0.70
+
+compute:                                 # ECS Fargate ARM (Graviton)
+  app_task_vcpu: 1
+  app_task_gb: 2
+  app_tasks_always: 2                    # multi-AZ, 1 task mỗi AZ, 24/7
+  app_tasks_peak_extra: 2                # thêm 2 task trong giờ hành chính
+  staging_task_vcpu: 0.5
+  staging_task_gb: 1
+  staging_hours: 220                     # staging chỉ chạy giờ hành chính
+
+sandbox:                                 # Lambda (Firecracker microVM), không egress
+  memory_gb: 2
+  avg_seconds: 20
+
+connectors:                              # Lambda ngoài VPC, OAuth ủy nhiệm
+  count: 4                               # Google, Microsoft 365, Atlassian, Notion
+  sync_per_user_day: 10                  # đồng bộ tăng dần (delta) + webhook
+  memory_gb: 0.5
+  avg_seconds: 2
+  live_calls_per_req: 0.6                # gọi API trực tiếp khi trả lời
+  live_seconds: 1
+
+database:                                # Aurora PostgreSQL Serverless v2 + pgvector, writer + reader khác AZ
+  instances: 2
+  acu_business: 2
+  acu_offhours: 0.5
+  storage_gb: 80                         # metadata + chat 3 tháng + vector halfvec 512 chiều
+  io_per_req: 60
+  staging_acu: 0.5
+  staging_storage_gb: 10
+
+storage:
+  workspace_gb_per_user: 2               # quota 10 GB, trung bình dùng 2 GB
+  objects_per_user: 2000
+  ia_share: 0.6                          # Intelligent-Tiering: 60% dữ liệu đã chuyển tầng IA
+  puts_per_req: 1
+  gets_per_req: 4
+
+cache_queue:
+  ddb_writes_per_req: 6
+  ddb_reads_per_req: 20
+  ddb_storage_gb: 10
+  sqs_msgs_per_req: 3
+  sfn_transitions_per_agent: 40
+
+security:
+  kms_keys: 4                            # workspace, oauth-token, audit, db
+  kms_req_per_req: 4                     # data key cache giảm số lệnh gọi KMS
+  secrets: 12                            # secret hệ thống (OAuth client, DB, webhook)
+
+governance:
+  untrusted_share: 0.40                  # request có nội dung connector (email, tài liệu) cần quét prompt injection
+  untrusted_text_units: 3                # 1 text unit = 1.000 ký tự
+  output_pii_share: 0.30                 # đầu ra đi ra ngoài (gửi mail, tạo ticket, xuất file) quét PII
+  output_text_units: 2
+  audit_kb_per_req: 4
+  audit_retention_months: 12
+
+network:
+  nat_gateways: 2                        # 1 mỗi AZ cho task app gọi AWS API
+  nat_gb: 150
+  bedrock_endpoint_azs: 2                # interface endpoint bedrock-runtime (H1 private endpoint)
+  vpce_gb: 120
+  waf_rules: 6
+  waf_requests_per_req: 4
+  egress_gb_per_user_day: 0.015          # stream câu trả lời + tải file
+
+observability:
+  log_kb_per_req: 30
+  log_retention_months: 1
+  custom_metrics: 60
+  alarms: 25
+  trace_sample: 0.10
+
+backup:
+  aurora_snapshot_gb_usw2: 80            # bản sao snapshot hằng ngày sang us-west-2 (RPO 1h nhờ PITR, DR khi mất region)
+  s3_replicated_gb: 4000                 # CRR workspace sang us-west-2, lớp Glacier Instant Retrieval
+  s3_new_gb_month: 400
+
+cicd:
+  build_minutes: 3000                    # CodeBuild arm1.small: build, test, eval smoke
+  ecr_gb: 20
+
+ops:
+  fte: 1
+  usd_per_fte_month: 2500                # 1 kỹ sư SRE/MLOps tại Việt Nam, lương + bảo hiểm + phụ cấp

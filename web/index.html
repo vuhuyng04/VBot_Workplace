@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VBot Workplace</title>
+<link rel="stylesheet" href="/assets/style.css?v=__BUILD__">
+</head>
+<body>
+<div id="login" class="login hidden">
+  <div class="login-card">
+    <div class="logo">VBot<span>/</span>Workplace</div>
+    <p>Trợ lý AI nội bộ. Đăng nhập bằng tài khoản tập đoàn (SSO + MFA).</p>
+    <button id="btnLogin" class="btn pri">Đăng nhập</button>
+    <a href="#/minh-bach" class="muted small" id="lnkPublic">Xem kiến trúc và chi phí (công khai)</a>
+  </div>
+</div>
+
+<div id="app" class="shell hidden">
+  <aside class="side">
+    <div class="logo">VBot<span>/</span>Workplace</div>
+    <nav class="tabs">
+      <a href="#/chat" data-tab="chat">Chat</a>
+      <a href="#/files" data-tab="files">Workspace</a>
+      <a href="#/sandbox" data-tab="sandbox">Sandbox code</a>
+      <a href="#/agent" data-tab="agent">Agent dự án</a>
+      <a href="#/image" data-tab="image">Thiết kế ảnh</a>
+      <a href="#/usage" data-tab="usage">Chi phí của tôi</a>
+      <a href="#/minh-bach" data-tab="minh-bach">Kiến trúc & chi phí</a>
+    </nav>
+    <div class="convs">
+      <div class="convs-head"><span>Hội thoại</span><button id="btnNew" class="btn sm">Mới</button></div>
+      <ul id="convList"></ul>
+    </div>
+    <div class="me"><span id="meEmail"></span><button id="btnLogout" class="btn sm ghost">Đăng xuất</button></div>
+  </aside>
+
+  <main class="main">
+    <section id="tab-chat" class="tab">
+      <div id="banner" class="banner hidden"></div>
+      <div id="messages" class="messages"></div>
+      <form id="chatForm" class="composer">
+        <select id="mode" title="Cấp tác vụ">
+          <option value="">Tự động chọn cấp</option>
+          <option value="t1">Cấp 1 · email, hỏi đáp</option>
+          <option value="t2">Cấp 2 · tài liệu</option>
+          <option value="t3">Cấp 3 · dữ liệu, code</option>
+          <option value="t4">Cấp 4 · dự án</option>
+          <option value="t5">Cấp 5 · thiết kế</option>
+        </select>
+        <textarea id="prompt" rows="2" placeholder="Hỏi VBot… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+        <label class="chk"><input type="checkbox" id="useRag" checked> Dùng tài liệu của tôi</label>
+        <button class="btn pri" id="btnSend">Gửi</button>
+      </form>
+    </section>
+
+    <section id="tab-files" class="tab hidden">
+      <h2>Workspace riêng</h2>
+      <p class="muted">Chỉ bạn và agent của bạn đọc được. Quota 10 GB. File được index để tìm kiếm theo quyền của bạn.</p>
+      <div class="drop" id="drop"><input type="file" id="fileInput" multiple><span>Chọn hoặc kéo thả file (txt, md, csv, docx, xlsx, pptx, pdf)</span></div>
+      <table class="tbl"><thead><tr><th>Tên</th><th>Nguồn</th><th>Chunk</th><th>Ngày</th><th></th></tr></thead><tbody id="fileRows"></tbody></table>
+    </section>
+
+    <section id="tab-sandbox" class="tab hidden">
+      <h2>Sandbox chạy code</h2>
+      <p class="muted">Python chạy trong microVM riêng, không có mạng, chỉ thấy file bạn chọn. File ghi vào <code>OUTPUT_DIR</code> được lưu về workspace.</p>
+      <div class="row"><label>File đầu vào:</label><select id="sbFiles" multiple size="4"></select></div>
+      <textarea id="sbCode" class="code" rows="14">import os, pandas as pd
+# File đầu vào nằm trong thư mục làm việc hiện tại; ghi kết quả vào OUTPUT_DIR
+df = pd.DataFrame({"thang": ["T1", "T2", "T3"], "doanh_thu": [120, 135, 160]})
+df["tang_truong_%"] = df["doanh_thu"].pct_change().mul(100).round(1)
+print(df)
+df.to_excel(os.path.join(os.environ["OUTPUT_DIR"], "bao_cao.xlsx"), index=False)</textarea>
+      <button class="btn pri" id="btnRun">Chạy</button>
+      <pre id="sbOut" class="out"></pre>
+    </section>
+
+    <section id="tab-agent" class="tab hidden">
+      <h2>Agent dự án (chạy nền)</h2>
+      <p class="muted">Agent lập kế hoạch, <b>chờ bạn xác nhận</b> trước mọi hành động ghi (tạo ticket, cập nhật trang), rồi chạy và báo kết quả.</p>
+      <textarea id="agGoal" rows="3" placeholder="Ví dụ: Lập kế hoạch sprint 2 tuần cho việc ra mắt cổng tuyển dụng nội bộ, tạo ticket cho từng hạng mục"></textarea>
+      <button class="btn pri" id="btnAgent">Giao việc</button>
+      <div id="agRuns" class="cards"></div>
+    </section>
+
+    <section id="tab-image" class="tab hidden">
+      <h2>Thiết kế: ảnh minh họa</h2>
+      <p class="muted">Sơ đồ, mockup nên hỏi trong Chat (cấp 5) để VBot viết SVG/HTML, rẻ hơn ảnh. Ảnh dùng Stable Image Core ($0,04/ảnh).</p>
+      <textarea id="imgPrompt" rows="3" placeholder="Ảnh minh họa tối giản cho slide về chuyển đổi số, tông xanh dương"></textarea>
+      <button class="btn pri" id="btnImg">Tạo ảnh</button>
+      <div id="imgOut"></div>
+    </section>
+
+    <section id="tab-usage" class="tab hidden">
+      <h2>Chi phí của tôi</h2>
+      <div id="usageBox"></div>
+    </section>
+
+    <section id="tab-minh-bach" class="tab hidden">
+      <h2>Kiến trúc, tính năng và chi phí</h2>
+      <div id="tpBox">Đang tải…</div>
+    </section>
+  </main>
+</div>
+<script src="/assets/app.js?v=__BUILD__"></script>
+</body>
+</html>

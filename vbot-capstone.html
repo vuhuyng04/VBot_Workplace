@@ -1,0 +1,826 @@
+<title>VBot Production Capstone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout concept: tài liệu đề bài dạng "hóa đơn cloud" — cột nội dung hẹp, số liệu và nhãn dùng chữ mono, hero có một tờ hóa đơn tháng còn trống tổng tiền. */
+:root{
+  --bg:#F2F5F7; --surface:#FFFFFF; --surface2:#E8EEF2; --fg:#0D1B26; --muted:#4F6270; --line:#D2DCE3;
+  --accent:#0B6E99; --accent-soft:#D9EDF6; --accent-ink:#FFFFFF;
+  --money:#B45309; --money-soft:#FBEBD6;
+  --ok:#15803D; --ok-soft:#DCF3E4; --err:#B42318; --err-soft:#FBE3E0; --warn:#946200; --warn-soft:#FBF0CF;
+  --font-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A141C; --surface:#111E29; --surface2:#182936; --fg:#E4EDF3; --muted:#92A6B4; --line:#25394A;
+    --accent:#5CC2F2; --accent-soft:#12303F; --accent-ink:#06202D;
+    --money:#F0A24B; --money-soft:#33260F;
+    --ok:#4ADE80; --ok-soft:#10301D; --err:#F97066; --err-soft:#3A1713; --warn:#F5C84C; --warn-soft:#33290C;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A141C; --surface:#111E29; --surface2:#182936; --fg:#E4EDF3; --muted:#92A6B4; --line:#25394A;
+  --accent:#5CC2F2; --accent-soft:#12303F; --accent-ink:#06202D;
+  --money:#F0A24B; --money-soft:#33260F;
+  --ok:#4ADE80; --ok-soft:#10301D; --err:#F97066; --err-soft:#3A1713; --warn:#F5C84C; --warn-soft:#33290C;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.6;padding-inline:16px;-webkit-text-size-adjust:100%}
+h1,h2,h3{line-height:1.2;text-wrap:balance;margin:0}
+p{margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--font-mono);font-size:.88em}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1040px;margin-inline:auto}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin-inline:-16px;padding-inline:16px}
+.bar-in{max-width:1040px;margin-inline:auto;display:flex;align-items:center;gap:16px;min-height:52px}
+.brand{font-family:var(--font-mono);font-weight:700;font-size:13px;white-space:nowrap;letter-spacing:.02em}
+.brand b{color:var(--accent)}
+.nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.nav::-webkit-scrollbar{display:none}
+.nav a{font-size:13px;text-decoration:none;color:var(--muted);padding:6px 10px;border-radius:6px;white-space:nowrap}
+.nav a:hover{background:var(--surface2);color:var(--fg)}
+.cta{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:14px;text-decoration:none;padding:9px 16px;border-radius:8px;border:0;cursor:pointer;font-family:inherit}
+.cta:hover{filter:brightness(1.08)}
+.cta[aria-disabled="true"]{background:var(--surface2);color:var(--muted);cursor:not-allowed;filter:none}
+.bar .cta{padding:6px 12px;font-size:13px}
+
+.hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:40px;align-items:center;padding-block:48px 40px}
+.hero h1{font-size:clamp(30px,4.4vw,46px);font-weight:800;letter-spacing:-.02em;margin-block:12px 18px}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.lede{font-size:18px;color:var(--muted);max-width:62ch}
+.lede strong{color:var(--fg);font-weight:600}
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:28px}
+.fact{background:var(--surface);padding:12px 14px}
+.fact b{display:block;font-family:var(--font-mono);font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.fact span{font-size:12px;color:var(--muted);line-height:1.35;display:block}
+.receipt{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:22px 20px 18px;font-family:var(--font-mono);font-size:13px;box-shadow:0 1px 0 var(--line),0 10px 30px -18px rgba(13,27,38,.35);position:relative}
+.receipt::after{content:"";position:absolute;left:0;right:0;bottom:-7px;height:7px;background:conic-gradient(from -45deg at 50% 100%,transparent 90deg,var(--surface) 0) 0 0/14px 7px;filter:drop-shadow(0 1px 0 var(--line))}
+.receipt h3{font-size:13px;text-align:center;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+.receipt .sub{text-align:center;color:var(--muted);font-size:11px;margin-bottom:14px}
+.rl{display:flex;gap:6px;align-items:baseline;padding:3px 0}
+.rl i{flex:1;border-bottom:1px dashed var(--line);transform:translateY(-3px);min-width:12px}
+.rl .q{color:var(--money);font-weight:700}
+.rl.tot{border-top:2px solid var(--fg);margin-top:8px;padding-top:10px;font-weight:700;font-size:15px}
+.rl.tot .q{font-size:17px}
+.receipt .foot{margin-top:12px;text-align:center;color:var(--muted);font-size:11px}
+
+section{padding-block:44px;border-top:1px solid var(--line)}
+section>h2{font-size:clamp(24px,3.2vw,32px);font-weight:700;letter-spacing:-.015em;margin-block:8px 10px}
+.sec-lede{color:var(--muted);max-width:68ch;margin-bottom:24px}
+.sec-lede strong{color:var(--fg)}
+h3{font-size:18px;font-weight:700;margin-bottom:8px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;min-width:0}
+.card p,.card li{color:var(--muted);font-size:15px}
+.card p strong,.card li strong{color:var(--fg);font-weight:600}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.tag.money{background:var(--money-soft);color:var(--money)}
+.tag.err{background:var(--err-soft);color:var(--err)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+ul.plain{margin:0;padding-left:18px;display:grid;gap:6px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.k{font-family:var(--font-mono);font-size:13px;white-space:nowrap;font-weight:500}
+tfoot td{font-weight:700;background:var(--surface2)}
+.note{border-left:3px solid var(--money);background:var(--money-soft);padding:12px 16px;border-radius:0 8px 8px 0;font-size:15px;margin-top:16px}
+.note strong{color:var(--money)}
+.note.red{border-left-color:var(--err);background:var(--err-soft)}
+.note.red strong{color:var(--err)}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chips span{font-size:13px;font-weight:500;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg)}
+.ladder{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.ladder li{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;position:relative;min-width:0}
+.ladder .lv{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.08em}
+.ladder b{display:block;margin-block:4px 6px}
+.ladder span{font-size:14px;color:var(--muted);line-height:1.45;display:block}
+.ladder li:nth-child(1){border-top:3px solid color-mix(in srgb,var(--accent) 30%,var(--line))}
+.ladder li:nth-child(2){border-top:3px solid color-mix(in srgb,var(--accent) 45%,var(--line))}
+.ladder li:nth-child(3){border-top:3px solid color-mix(in srgb,var(--accent) 60%,var(--line))}
+.ladder li:nth-child(4){border-top:3px solid color-mix(in srgb,var(--accent) 80%,var(--line))}
+.ladder li:nth-child(5){border-top:3px solid var(--accent)}
+
+.sched{list-style:none;margin:0;padding:0;display:grid;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.sched li{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);align-items:baseline}
+.sched li:last-child{border-bottom:0}
+.sched .t{font-family:var(--font-mono);font-size:13px;color:var(--accent);font-weight:700;white-space:nowrap}
+.sched b{display:block;font-weight:600}
+.sched span.d{color:var(--muted);font-size:14px}
+.sched .dur{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.sched li.hot{background:var(--money-soft)}
+.sched li.hot .t{color:var(--money)}
+.role .own{font-family:var(--font-mono);font-size:12px;color:var(--accent);margin-top:10px;display:block}
+
+.chk{display:grid;gap:8px;margin:10px 0 0;padding:0;list-style:none}
+.chk label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:14.5px;color:var(--muted);line-height:1.5}
+.chk input{margin-top:4px;accent-color:var(--accent);width:16px;height:16px;flex:none}
+.chk input:checked+span{color:var(--fg);text-decoration:line-through;text-decoration-color:var(--line)}
+.lane{border-top:3px solid var(--accent)}
+.lane h3{margin-bottom:2px}
+.lane .who{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.comp td:first-child{font-family:var(--font-mono);font-size:13px;font-weight:700;white-space:nowrap}
+.comp td.req{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+
+.outline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;counter-reset:s}
+.outline li{counter-increment:s;display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.outline li::before{content:counter(s,decimal-leading-zero);font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:13px;padding-top:2px}
+.outline b{font-weight:600}
+.outline span{color:var(--muted);font-size:14px;display:block}
+
+.cols td:nth-child(1){font-family:var(--font-mono);font-size:13px;font-weight:700;white-space:nowrap}
+.cols td:nth-child(3){font-family:var(--font-mono);font-size:12.5px;color:var(--muted)}
+pre.code{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--font-mono);font-size:12px;line-height:1.55;color:var(--fg);white-space:pre;max-height:260px}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-block:12px}
+.btn{font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.vbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:14px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px 16px;display:grid;gap:10px;justify-items:center;text-align:center;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .fname{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.verdict{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:14px 16px;border-radius:10px;border:1px solid}
+.verdict.ok{background:var(--ok-soft);border-color:var(--ok)}
+.verdict.bad{background:var(--err-soft);border-color:var(--err)}
+.verdict .big{font-weight:800;font-size:18px}
+.verdict.ok .big{color:var(--ok)}.verdict.bad .big{color:var(--err)}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sum div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.sum b{display:block;font-family:var(--font-mono);font-size:18px;font-variant-numeric:tabular-nums}
+.sum span{font-size:12px;color:var(--muted)}
+.bars{display:grid;gap:6px}
+.brow{display:grid;grid-template-columns:130px minmax(0,1fr) 150px;gap:10px;align-items:center;font-size:13px}
+.brow .l{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.brow .track{height:10px;background:var(--surface2);border-radius:5px;overflow:hidden}
+.brow .fill{display:block;height:100%;background:var(--accent);border-radius:5px}
+.brow .v{font-family:var(--font-mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.issues{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.issues li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:10px;align-items:baseline;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+.issues .ln{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+
+.rub{display:grid;gap:10px}
+.rrow{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:6px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.rrow b{font-weight:600}
+.rrow .pts{font-family:var(--font-mono);font-size:22px;font-weight:700;text-align:right;color:var(--accent)}
+.rrow p{grid-column:1/-1;font-size:14px;color:var(--muted)}
+.rrow .meter{grid-column:1/-1;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.rrow .meter i{display:block;height:100%;background:var(--accent)}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details+details{margin-top:8px}
+summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--font-mono);color:var(--accent);font-weight:700;width:14px}
+details[open] summary::before{content:"−"}
+details .in{padding:0 16px 14px 40px;color:var(--muted);font-size:15px}
+footer{padding-block:32px 56px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:28px;padding-block:32px 28px}
+  .g3,.g2,.outline{grid-template-columns:minmax(0,1fr)}
+  .ladder{grid-template-columns:minmax(0,1fr)}
+  .facts,.sum{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sched li{grid-template-columns:minmax(0,1fr);gap:2px}
+  .sched .dur{order:-1}
+  .brow{grid-template-columns:96px minmax(0,1fr) 110px}
+  .bar .brand{display:none}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">VBOT<b>/</b>CAPSTONE</div>
+    <nav class="nav" aria-label="Mục lục">
+      <a href="#san-pham">Sản phẩm</a><a href="#lich">Lịch</a><a href="#nhom">Nhóm</a><a href="#gia-dinh">Giả định</a><a href="#rang-buoc">Ràng buộc</a><a href="#cau-hoi">Câu hỏi</a><a href="#slide">Slide</a><a href="#bao-gia">Báo giá</a><a href="#cham">Chấm điểm</a>
+    </nav>
+    <a class="cta formlink" href="https://docs.google.com/forms/d/e/1FAIpQLSe_AH_QEF6wbf8esXmd9t9MSoF7oUglEKEbw2acjLXW4m3acQ/viewform" target="_blank" rel="noopener">Nộp bài</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+<div class="hero" id="de-bai">
+  <div>
+    <div class="eyebrow">Track 2 · Production Capstone</div>
+    <h1>VBot Workplace: trợ lý AI văn phòng trên cloud với <em>hóa đơn tháng thấp nhất</em></h1>
+    <p class="lede">Tập đoàn cần <strong>VBot</strong>, trợ lý AI nội bộ giống OpenAI Dots hay Grok. VBot kết nối Google Workspace, Microsoft 365, Outlook, Notion, Jira, Confluence. Mỗi nhân viên có không gian lưu trữ và làm việc riêng, agent chạy code trong sandbox an toàn, dữ liệu và AI được quản trị chặt. Mỗi nhóm đóng vai đội platform: thiết kế kiến trúc production trên <strong>cloud</strong> cho 2.000 người dùng mỗi ngày, rồi chốt <strong>chi phí vận hành hằng tháng thấp nhất</strong> mà chất lượng vẫn giữ nguyên.</p>
+    <div class="facts">
+      <div class="fact"><b>2.000</b><span>người dùng hoạt động mỗi ngày</span></div>
+      <div class="fact"><b>5 cấp</b><span>tác vụ, từ email đến thiết kế</span></div>
+      <div class="fact"><b>19 + HA</b><span>thành phần hạ tầng bắt buộc</span></div>
+      <div class="fact"><b>2 file</b><span>báo giá XLSX + slide thuyết trình</span></div>
+    </div>
+  </div>
+  <aside class="receipt" aria-label="Hóa đơn tháng của VBot, tổng tiền còn trống">
+    <h3>VBot Workplace</h3>
+    <div class="sub">hóa đơn hạ tầng · 1 tháng · USD</div>
+    <div class="rl">LLM, embedding<i></i><span class="q">$ ?</span></div>
+    <div class="rl">Gateway, LB, SSO<i></i><span class="q">$ ?</span></div>
+    <div class="rl">Sandbox agent<i></i><span class="q">$ ?</span></div>
+    <div class="rl">DB, vector, workspace<i></i><span class="q">$ ?</span></div>
+    <div class="rl">Connectors SaaS<i></i><span class="q">$ ?</span></div>
+    <div class="rl">Monitoring, governance<i></i><span class="q">$ ?</span></div>
+    <div class="rl">Vận hành (FTE)<i></i><span class="q">$ ?</span></div>
+    <div class="rl tot">TỔNG / THÁNG<i></i><span class="q">$ ?</span></div>
+    <div class="rl">chia 2.000 DAU<i></i><span class="q">$ ? / user</span></div>
+    <div class="foot">Mỗi dòng phải có ảnh chụp hoặc link bằng chứng giá</div>
+  </aside>
+</div>
+
+<section id="muc-tieu">
+  <div class="eyebrow">Nhiệm vụ</div>
+  <h2>Nhóm cần giao nộp gì</h2>
+  <p class="sec-lede">Hai file, nộp qua một Google Form. Tổng chi phí trên slide phải bằng dòng TOTAL trong báo giá. Chi phí thấp nhất chỉ có giá trị khi kiến trúc đủ thành phần hạ tầng và đạt các ràng buộc cứng.</p>
+  <div class="grid g2">
+    <div class="card">
+      <span class="tag">Bài nộp 1</span>
+      <h3 style="margin-top:10px">Slide thuyết trình về hệ thống</h3>
+      <p>Kiến trúc, lý do chọn công nghệ, model và hệ thống, bảo mật, governance, chi phí. Tối đa 15 slide nội dung, PPTX hoặc PDF. Xem <a href="#slide">khung slide</a>.</p>
+    </div>
+    <div class="card">
+      <span class="tag money">Bài nộp 2</span>
+      <h3 style="margin-top:10px">Báo giá hạ tầng dạng XLSX, kèm bằng chứng</h3>
+      <p>Mỗi dòng một hạng mục chi phí tháng, có link trang giá chính thức và ảnh chụp màn hình hoặc link bản tính giá. Dòng cuối là <code>TOTAL</code>. Có công cụ kiểm tra file ngay tại <a href="#bao-gia">phần Báo giá</a>.</p>
+    </div>
+  </div>
+  <div class="note"><strong>Cách thắng.</strong> Tổng chi phí tháng thấp nhất trong số các nhóm vượt cổng chất lượng. Mọi giả định tiết kiệm (hit rate của cache, tỉ lệ chuyển sang model nhỏ, mức dùng GPU, reserved hay on-demand) phải ghi ra và chịu chất vấn của hội đồng.</div>
+  <div class="note red"><strong>Báo giá enterprise.</strong> Không dùng free tier, gói dùng thử, credit khuyến mãi hay credit startup. Mỗi đơn giá phải có bằng chứng: ảnh chụp màn hình trang giá hoặc calculator, hoặc link bản tính giá đã lưu. Dòng không có bằng chứng bị coi là chưa báo giá.</div>
+</section>
+
+<section id="san-pham">
+  <div class="eyebrow">Sản phẩm</div>
+  <h2>VBot phải làm được gì</h2>
+  <p class="sec-lede">Phạm vi chức năng để nhóm sizing. Kiến trúc phải phục vụ được cả năm cấp độ tác vụ, từ email đơn giản đến agent nhiều bước và thiết kế.</p>
+  <ol class="ladder" aria-label="Năm cấp độ tác vụ theo độ phức tạp tăng dần">
+    <li><span class="lv">CẤP 1</span><b>Email và hỏi đáp</b><span>Soạn, trả lời, tóm tắt thread. Tra cứu tài liệu nội bộ.</span></li>
+    <li><span class="lv">CẤP 2</span><b>Tài liệu và slide</b><span>Viết báo cáo, biên bản, tờ trình. Xuất DOCX, XLSX, PPTX.</span></li>
+    <li><span class="lv">CẤP 3</span><b>Dữ liệu và code</b><span>Phân tích bảng tính, viết script, sửa lỗi, review code trong sandbox.</span></li>
+    <li><span class="lv">CẤP 4</span><b>Agent dự án</b><span>Đọc Jira, Confluence, Notion; lập kế hoạch, tạo ticket, cập nhật trang.</span></li>
+    <li><span class="lv">CẤP 5</span><b>Thiết kế</b><span>Mockup giao diện, sơ đồ, ảnh minh họa cho tài liệu và slide.</span></li>
+  </ol>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <span class="tag">Connectors</span>
+      <div class="chips"><span>Gmail</span><span>Google Drive</span><span>Google Calendar</span><span>Docs, Sheets, Slides</span><span>Outlook</span><span>Microsoft 365</span><span>OneDrive, SharePoint</span><span>Teams</span><span>Notion</span><span>Jira</span><span>Confluence</span></div>
+      <p style="margin-top:12px">Agent hành động <strong>bằng quyền ủy nhiệm của chính người dùng</strong> (OAuth, scope tối thiểu). Không dùng tài khoản dịch vụ có quyền đọc toàn bộ tập đoàn.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Không gian riêng</span>
+      <p style="margin-top:10px">Mỗi nhân viên có workspace riêng: file tải lên, file agent tạo ra, lịch sử chat, bộ nhớ dài hạn. <strong>Người khác và agent của người khác không đọc được.</strong> Quota 10 GB mỗi người.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Sandbox cho AI</span>
+      <p style="margin-top:10px">Mọi đoạn code agent viết đều chạy trong <strong>sandbox cô lập</strong> (container hoặc microVM trên Kubernetes hay instance riêng). Không vào được mạng nội bộ, chỉ thấy workspace của đúng người dùng, giới hạn CPU, RAM, thời gian, hủy sau khi chạy.</p>
+    </div>
+    <div class="card">
+      <span class="tag">AI + Data governance</span>
+      <p style="margin-top:10px"><strong>AI:</strong> guardrail, chống prompt injection nằm trong email và tài liệu, xác nhận của người dùng trước hành động ghi ra ngoài, cổng eval khi đổi model. <strong>Data:</strong> phân loại dữ liệu, che PII, audit log, thời hạn lưu, dữ liệu không dùng để huấn luyện bởi bên thứ ba.</p>
+    </div>
+  </div>
+</section>
+
+<section id="lich">
+  <div class="eyebrow">Lịch buổi học</div>
+  <h2>Khoảng 4,5 giờ, từ đọc đề đến bảo vệ</h2>
+  <p class="sec-lede">Lớp chia thành <strong>N nhóm</strong>, mỗi nhóm 4–5 người (N = số học viên chia 5, làm tròn lên). Giờ cụ thể do giảng viên điều chỉnh.</p>
+  <ol class="sched">
+    <li><span class="t">00:00 – 00:15</span><div><b>Mở đề và hỏi đáp</b><span class="d">Giảng viên đọc đề, giải thích phạm vi, quy định bằng chứng giá và cách chấm.</span></div><span class="dur">15 phút</span></li>
+    <li><span class="t">00:15 – 00:25</span><div><b>Chia nhóm, phân vai</b><span class="d">Chọn 5 vai ở phần Nhóm. Nhóm 4 người gộp hai vai cuối.</span></div><span class="dur">10 phút</span></li>
+    <li><span class="t">00:25 – 01:15</span><div><b>Giai đoạn 1: sizing</b><span class="d">Từ 2.000 DAU tự ước lượng: request mỗi người mỗi ngày, token vào và ra theo từng cấp tác vụ, giờ cao điểm, lượt sandbox, dung lượng lưu trữ. Chốt hướng LLM: API, tự host hoặc hybrid.</span></div><span class="dur">50 phút</span></li>
+    <li><span class="t">01:15 – 01:25</span><div><b>Nghỉ</b><span class="d">Giảng viên đi từng nhóm hỏi hướng LLM và công nghệ sandbox đã chốt.</span></div><span class="dur">10 phút</span></li>
+    <li><span class="t">01:25 – 02:35</span><div><b>Giai đoạn 2: kiến trúc và báo giá</b><span class="d">Vẽ sơ đồ đủ thành phần hạ tầng, điền báo giá theo từng component, chụp màn hình bằng chứng ngay khi lấy giá.</span></div><span class="dur">70 phút</span></li>
+    <li><span class="t">02:35 – 03:05</span><div><b>Giai đoạn 3: tối ưu và đóng gói</b><span class="d">Tìm thêm đòn bẩy tiết kiệm, hoàn thiện slide, chạy công cụ kiểm tra báo giá đến khi ĐẠT, nộp form.</span></div><span class="dur">30 phút</span></li>
+    <li class="hot"><span class="t">03:05</span><div><b>Hạn nộp</b><span class="d">Form đóng. Nộp trễ bị trừ điểm.</span></div><span class="dur">hạn chót</span></li>
+    <li><span class="t">03:10 – …</span><div><b>Bảo vệ trước hội đồng</b><span class="d">Mỗi nhóm 7 phút trình bày và 3 phút hỏi đáp. Tổng N × 10 phút.</span></div><span class="dur">N × 10 phút</span></li>
+  </ol>
+</section>
+
+<section id="nhom">
+  <div class="eyebrow">Nhóm và vai trò</div>
+  <h2>Năm vai, mỗi vai sở hữu một nhóm component</h2>
+  <p class="sec-lede">Mỗi vai chịu trách nhiệm cho các dòng báo giá và các hộp trên sơ đồ thuộc component của mình, rồi cả nhóm ghép lại.</p>
+  <div class="grid g3">
+    <div class="card role"><h3>Kiến trúc sư trưởng</h3><p>Luồng request đầu cuối, ghép các mảng, giữ slide và báo giá khớp nhau, dẫn phần bảo vệ.</p><span class="own">ops_labor, licenses, contingency, TOTAL</span></div>
+    <div class="card role"><h3>Model serving</h3><p>Model cho từng cấp tác vụ, API hay tự host, GPU, routing, LLM gateway.</p><span class="own">llm, embedding, gateway</span></div>
+    <div class="card role"><h3>Data và workspace</h3><p>Connectors SaaS, index tài liệu theo quyền, workspace riêng, lịch sử chat, hàng đợi agent.</p><span class="own">connectors, database, vector_db, object_storage, cache_queue</span></div>
+    <div class="card role"><h3>Sandbox, bảo mật, governance</h3><p>Cô lập code của agent, SSO, phân quyền, token vault, guardrail, DLP, audit.</p><span class="own">sandbox, authn, authz, secrets_kms, governance</span></div>
+    <div class="card role"><h3>Cloud, HA, vận hành</h3><p>Compute, mạng, load balancer, HA, backup và DR, monitoring, CI/CD và staging.</p><span class="own">compute, load_balancer, network, backup_dr, monitoring, cicd</span></div>
+    <div class="card" style="background:var(--surface2);border-style:dashed"><h3>Cả nhóm</h3><p>Cùng chốt hướng LLM ở checkpoint 01:15 và danh sách đòn bẩy tiết kiệm. Mỗi thành viên phải trả lời được câu hỏi về mọi mảng.</p></div>
+  </div>
+</section>
+
+<section id="gia-dinh">
+  <div class="eyebrow">Giả định</div>
+  <h2>Đề chỉ cho một con số: 2.000 người dùng mỗi ngày</h2>
+  <p class="sec-lede">Mọi khối lượng khác do nhóm tự ước lượng và trình bày trên slide <strong>Giả định và ước lượng tải</strong>, kèm công thức. Báo giá phải dùng đúng các con số đó. Hội đồng sẽ hỏi căn cứ của từng con số và so sánh ước lượng giữa các nhóm.</p>
+  <div class="grid g2">
+    <div class="card">
+      <span class="tag">Đề cho sẵn</span>
+      <ul class="plain" style="margin-top:10px">
+        <li><strong>2.000</strong> người dùng hoạt động mỗi ngày, nhân viên văn phòng của tập đoàn.</li>
+        <li>Giờ hành chính T2–T6, 8:00–18:00 (GMT+7), 22 ngày làm việc mỗi tháng.</li>
+        <li>Năm cấp tác vụ và các connector ở phần <a href="#san-pham">Sản phẩm</a>.</li>
+        <li>Môi trường prod và 1 staging.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="tag money">Nhóm tự ước lượng</span>
+      <ul class="plain" style="margin-top:10px">
+        <li>Số request mỗi người mỗi ngày và tỉ lệ giữa năm cấp tác vụ.</li>
+        <li>Token vào và ra cho mỗi loại tác vụ, kể cả context RAG và các bước của agent.</li>
+        <li>Giờ cao điểm: request/giây, token/giây, số phiên đồng thời.</li>
+        <li>Số lượt sandbox, thời gian mỗi lượt, số ảnh sinh ra.</li>
+        <li>Dung lượng knowledge base, workspace riêng, lịch sử chat, log và audit.</li>
+        <li>Số lệnh gọi connector và lưu lượng mạng ra ngoài (egress).</li>
+      </ul>
+    </div>
+  </div>
+  <h3 style="margin-top:28px">Quy tắc tính chi phí</h3>
+  <div class="tablewrap">
+    <table>
+      <tbody>
+        <tr><td class="k">Tiền tệ</td><td>USD, chưa VAT.</td></tr>
+        <tr><td class="k">Giá</td><td>Giá niêm yết công khai trên trang chính thức của nhà cung cấp vào thời điểm làm bài. Không dùng giá đàm phán riêng.</td></tr>
+        <tr><td class="k">Bằng chứng</td><td>Mỗi dòng có link (trang giá, bản tính giá đã lưu của AWS, Google Cloud hay Azure Pricing Calculator, ảnh chụp) hoặc mã ảnh E01… dán trong sheet <code>BangChung</code>. Ảnh phải thấy tên dịch vụ, SKU, region và đơn giá.</td></tr>
+        <tr><td class="k">Cấm</td><td>Free tier, gói dùng thử, credit khuyến mãi, credit startup, chương trình ưu đãi tạm thời. Công cụ kiểm tra báo lỗi khi gặp các từ này.</td></tr>
+        <tr><td class="k">Cam kết</td><td>Được dùng reserved, savings plan, committed use nếu ghi rõ trong cột Ghi chú. Quy về chi phí hiệu dụng mỗi tháng.</td></tr>
+        <tr><td class="k">Giờ</td><td>Chạy 24/7 là 730 giờ/tháng. Giờ hành chính là 22 ngày × 10 giờ = 220 giờ.</td></tr>
+        <tr><td class="k">Gộp</td><td>Thành phần đã nằm trong dịch vụ khác (ví dụ phân quyền có sẵn trong gateway): chi phí 0, Ghi chú nói rõ "nằm trong" dịch vụ nào, vẫn cần bằng chứng.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+<section id="rang-buoc">
+  <div class="eyebrow">Ràng buộc cứng</div>
+  <h2>Rẻ đến đâu cũng phải đạt tám điều này</h2>
+  <p class="sec-lede">Nhóm vi phạm bất kỳ điều nào, hoặc thiếu thành phần hạ tầng bắt buộc, chỉ nhận tối đa một nửa điểm chi phí.</p>
+  <div class="grid g2">
+    <div class="card"><span class="tag err">H1</span><h3 style="margin-top:8px">Cloud</h3><p>Chạy trên một cloud chính, nêu region và lý do. Gọi API model của bên khác được, nhưng qua private endpoint hoặc kênh có cam kết không lưu dữ liệu.</p></div>
+    <div class="card"><span class="tag err">H2</span><h3 style="margin-top:8px">Định danh và phân quyền</h3><p>SSO tập đoàn (OIDC hoặc SAML) và MFA. RBAC hoặc ABAC cho chức năng; ACL tài liệu theo quyền gốc. Agent dùng OAuth ủy nhiệm, scope tối thiểu, token cất trong vault có mã hóa.</p></div>
+    <div class="card"><span class="tag err">H3</span><h3 style="margin-top:8px">Cô lập user và sandbox</h3><p>Workspace, bộ nhớ và kết quả tìm kiếm tách riêng từng người. Sandbox container hoặc microVM (gVisor, Firecracker, Kata…), mặc định không có egress, giới hạn tài nguyên, hủy sau khi chạy.</p></div>
+    <div class="card"><span class="tag err">H4</span><h3 style="margin-top:8px">AI governance</h3><p>Guardrail đầu vào và đầu ra, chống prompt injection từ nội dung connector, người dùng xác nhận trước khi agent gửi email, tạo ticket hay xóa file. Cổng eval trước khi đổi model hoặc prompt.</p></div>
+    <div class="card"><span class="tag err">H5</span><h3 style="margin-top:8px">Data governance</h3><p>Mã hóa lúc lưu và lúc truyền. Che PII (DLP), phân loại dữ liệu, thời hạn lưu, audit log 12 tháng. Nhà cung cấp model không được huấn luyện trên dữ liệu.</p></div>
+    <div class="card"><span class="tag err">H6</span><h3 style="margin-top:8px">Độ trễ</h3><p>Chat, email, tài liệu: p95 thời gian tới token đầu tiên không quá 3 giây ở giờ cao điểm. Agent dự án chạy nền, xong trong 10 phút và có thông báo.</p></div>
+    <div class="card"><span class="tag err">H7</span><h3 style="margin-top:8px">HA, backup, DR</h3><p>Khả dụng 99,5% trong giờ hành chính, không có điểm lỗi đơn ở LB, gateway, database. Backup có kiểm thử khôi phục. RTO 4 giờ, RPO 1 giờ.</p></div>
+    <div class="card"><span class="tag err">H8</span><h3 style="margin-top:8px">Chất lượng và kiểm soát chi phí</h3><p>Mỗi cấp tác vụ đạt ít nhất 95% điểm của model tham chiếu nhóm nêu tên, có cách đo. Quota theo người và đơn vị, cảnh báo ngân sách, cách cắt khi vượt.</p></div>
+  </div>
+</section>
+
+<section id="cau-hoi">
+  <div class="eyebrow">Kiến trúc</div>
+  <h2>Câu hỏi gợi mở theo mảng</h2>
+  <p class="sec-lede">Tick khi nhóm đã thống nhất đáp án. Trạng thái lưu trong trình duyệt của riêng bạn.</p>
+  <div class="grid g2" id="lanes"></div>
+</section>
+
+<section id="slide">
+  <div class="eyebrow">Bài nộp 1</div>
+  <h2>Slide thuyết trình về hệ thống</h2>
+  <p class="sec-lede">Tối đa <strong>15 slide nội dung</strong>, 16:9, PPTX hoặc PDF, tối đa 10 MB. Phụ lục (ảnh bằng chứng, bảng phụ) không tính vào giới hạn. Trình bày 7 phút. Tên file: <code>G03_slide.pdf</code> hoặc <code>G03_slide.pptx</code> (thay 03 bằng mã nhóm). Khung đề xuất:</p>
+  <ol class="outline">
+    <li><div><b>Giả định và ước lượng tải</b><span>Từ 2.000 DAU ra request, token, giờ cao điểm, lượt sandbox, dung lượng; có công thức.</span></div></li>
+    <li><div><b>Kiến trúc tổng thể</b><span>Sơ đồ đủ component, ghi mã component trên từng hộp.</span></div></li>
+    <li><div><b>Luồng một request</b><span>Từ SSO, LB, gateway tới model, connector, sandbox và ngược lại.</span></div></li>
+    <li><div><b>Model và routing</b><span>Model cho từng cấp tác vụ, API hay tự host, GPU, lý do.</span></div></li>
+    <li><div><b>Lý do chọn công nghệ</b><span>So sánh ít nhất 2 phương án cho các lựa chọn lớn, có số liệu.</span></div></li>
+    <li><div><b>Connectors và phân quyền</b><span>OAuth ủy nhiệm, scope, token vault, ACL tài liệu.</span></div></li>
+    <li><div><b>Workspace riêng và sandbox</b><span>Cô lập dữ liệu từng người, công nghệ sandbox, egress.</span></div></li>
+    <li><div><b>AI và data governance</b><span>Guardrail, prompt injection, DLP, audit, eval gate.</span></div></li>
+    <li><div><b>HA, backup, DR</b><span>Replica, AZ, failover, RTO và RPO, diễn tập khôi phục.</span></div></li>
+    <li><div><b>Monitoring và FinOps</b><span>Đo gì, cảnh báo gì, chi phí theo user và đơn vị.</span></div></li>
+    <li><div><b>Chi phí</b><span>Tổng USD/tháng, USD/DAU, 5 hạng mục lớn nhất, đòn bẩy tiết kiệm kèm số USD.</span></div></li>
+    <li><div><b>Rủi ro và mở rộng</b><span>Rủi ro lớn nhất, chi phí khi DAU gấp đôi.</span></div></li>
+  </ol>
+  <ul class="chk" id="slideChk" style="margin-top:18px"></ul>
+</section>
+
+<section id="bao-gia">
+  <div class="eyebrow">Bài nộp 2</div>
+  <h2>Báo giá XLSX: 5 cột, dòng nào cũng có bằng chứng</h2>
+  <p class="sec-lede">File <code>.xlsx</code> có sheet <code>BaoGia</code> (bắt buộc) và sheet <code>BangChung</code> (khi dùng mã ảnh E01…). Mỗi dòng là một hạng mục chi phí tháng; một component có thể có nhiều dòng. Dòng cuối: Component = <code>TOTAL</code>. Trợ giảng gửi file mẫu có sẵn dropdown. Tên file: <code>G03_baogia.xlsx</code>.</p>
+
+  <h3>Sheet BaoGia</h3>
+  <div class="tablewrap cols" style="margin-bottom:16px">
+    <table id="spec">
+      <thead><tr><th>Cột</th><th>Ghi gì</th><th>Ví dụ</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="grid g2" style="margin-bottom:24px">
+    <div class="card"><span class="tag">Sheet BangChung</span><p style="margin-top:8px">Cột A <code>evidence_id</code> (E01, E02…), B mô tả, C link nếu có, D ngày chụp. Dán ảnh chụp màn hình vào cột E <strong>cùng dòng</strong> với mã. Một ảnh dùng được cho nhiều dòng báo giá.</p></div>
+    <div class="card"><span class="tag">Ghi chú tốt</span><p style="margin-top:8px">Giám khảo đối chiếu Ghi chú với bằng chứng, nên ghi đủ để tính lại được: dịch vụ, SKU, region, <strong>đơn giá × số lượng</strong>, giả định. Ví dụ: <em>node 4 vCPU 16 GB, ap-southeast-1, 4 node (2 mỗi AZ) × 730 giờ × 0,20 USD = 584</em>.</p></div>
+  </div>
+
+  <h3>Mẫu để dán vào Excel hoặc Google Sheets</h3>
+  <p class="sec-lede" style="margin-bottom:10px">Nhấn Sao chép rồi dán vào ô A1 của sheet <code>BaoGia</code>: dữ liệu tự tách đúng 5 cột. Các dòng ví dụ cố tình không đạt kiểm tra cho đến khi bạn thay hết.</p>
+  <pre class="code" id="tpl" tabindex="0"></pre>
+  <div class="btnrow">
+    <button class="btn pri" id="tplCopy" type="button">Sao chép mẫu</button>
+    <span id="tplMsg" class="mono" style="color:var(--muted)" role="status"></span>
+  </div>
+
+  <h3 style="margin-top:32px">Công cụ kiểm tra báo giá</h3>
+  <p class="sec-lede" style="margin-bottom:12px">Chạy ngay trong trình duyệt, file không được gửi đi đâu. Công cụ kiểm tra đủ 5 cột, component hợp lệ, đủ component bắt buộc, chi phí là số, tổng khớp, dòng nào cũng có bằng chứng, không có free tier hay dùng thử. Công cụ không xem được nội dung ảnh; giám khảo kiểm từng ảnh và đối chiếu với nguồn.</p>
+  <div class="vbox">
+    <div class="drop" id="drop">
+      <label class="btn pri" for="xlsxFile">Chọn file .xlsx</label>
+      <input id="xlsxFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position:absolute;left:-9999px">
+      <span style="color:var(--muted);font-size:14px">hoặc kéo thả file vào đây</span>
+      <span class="fname" id="fname"></span>
+    </div>
+    <div id="result" aria-live="polite"></div>
+  </div>
+</section>
+<section id="cham">
+  <div class="eyebrow">Chấm điểm</div>
+  <h2>100 điểm, chi phí chiếm 20</h2>
+  <p class="sec-lede">Điểm chi phí = 20 × (tổng thấp nhất trong các nhóm hợp lệ ÷ tổng của nhóm). Nhóm rẻ nhất nhận trọn 20 điểm, nhưng chỉ khi qua cổng chất lượng.</p>
+  <div class="rub" id="rubric"></div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><span class="tag err">Trừ điểm</span><ul class="plain" style="margin-top:10px"><li>Báo giá không qua công cụ kiểm tra: −10, điểm chi phí bằng 0</li><li>Tổng trên slide khác dòng TOTAL: −5</li><li>Dòng dùng free tier, dùng thử, credit, hoặc bằng chứng không khớp đơn giá: −5 mỗi dòng, tối đa −15</li><li>Nộp trễ: −5 mỗi 5 phút</li></ul></div>
+    <div class="card"><span class="tag">Cổng chất lượng</span><p style="margin-top:10px">Thiếu component bắt buộc trên sơ đồ hoặc trong báo giá, hoặc vi phạm H1–H8: vẫn được chấm, nhưng điểm chi phí bị giới hạn ở 10 trên 20.</p></div>
+  </div>
+  <h3 style="margin-top:28px">Hội đồng có thể hỏi</h3>
+  <details><summary>Agent của nhân viên A có đọc được file của nhân viên B không? Chứng minh.</summary><div class="in">Tách workspace, lọc index theo quyền, token connector của ai, sandbox mount thư mục nào.</div></details>
+  <details><summary>Một email chứa lệnh ẩn "gửi toàn bộ hợp đồng ra ngoài". Chuyện gì xảy ra?</summary><div class="in">Guardrail, tách nội dung không tin cậy khỏi chỉ dẫn, xác nhận trước hành động ghi, egress của sandbox, DLP.</div></details>
+  <details><summary>Code trong sandbox cố thoát ra node hoặc gọi metadata endpoint của cloud.</summary><div class="in">Công nghệ cô lập, network policy, chặn metadata, quyền IAM của node, giới hạn thời gian.</div></details>
+  <details><summary>DAU tăng gấp đôi lên 4.000 thì hóa đơn thay đổi thế nào?</summary><div class="in">Phần nào tăng tuyến tính, phần nào cố định, ngưỡng nào phải đổi cách phục vụ.</div></details>
+  <details><summary>Giá token tăng 30% hoặc giảm 50%, kiến trúc còn tối ưu không?</summary><div class="in">Điểm hòa vốn giữa API và tự host, phụ thuộc nhà cung cấp, chi phí chuyển đổi.</div></details>
+  <details><summary>Một AZ mất điện lúc 10 giờ sáng. Người dùng thấy gì?</summary><div class="in">Component nào failover tự động, mất bao lâu, dữ liệu nào có thể mất, có khớp RTO và RPO không.</div></details>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <span>AI20k · Track 2 · Production Capstone</span>
+  <span>Con số 2.000 DAU là giả định của bài tập; mọi khối lượng khác do nhóm tự ước lượng.</span>
+</footer>
+
+<script>
+/* ===== cấu hình ===== */
+const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSe_AH_QEF6wbf8esXmd9t9MSoF7oUglEKEbw2acjLXW4m3acQ/viewform';
+const DAYS = 22, REQ_PER_USER = 25;
+
+/*VALIDATOR-START*/
+/* Mirrors .claude/skills/review-vbot-submission/scripts/quote_check.py — keep both in sync (tests/parity.mjs). */
+const DAU = 2000, MAX_ROWS = 150;
+const SHEET_QUOTE = 'BaoGia', SHEET_EVIDENCE = 'BangChung';
+const COLUMNS = [['component','Component'],['y_nghia','Ý nghĩa'],['ghi_chu','Ghi chú'],['chi_phi','Chi phí/tháng (USD)'],['bang_chung','Bằng chứng']];
+const KEYS = COLUMNS.map(c => c[0]), LABEL = Object.fromEntries(COLUMNS);
+const COMPONENTS = {
+  compute:['Máy chủ ứng dụng, node Kubernetes, serverless',true,'Loại máy hoặc node, số lượng, autoscale theo giờ hành chính'],
+  llm:['LLM serving: API theo token hoặc GPU tự host',true,'Model cho từng cấp tác vụ, API hay tự host, loại GPU, routing'],
+  embedding:['Embedding, rerank',false,'Model embedding, chi phí index lần đầu và hằng ngày'],
+  gateway:['API gateway, LLM gateway',true,'Quota, rate limit, retry, fallback model, ghi log token'],
+  load_balancer:['Load balancer',true,'Loại LB, TLS, health check, đặt trước thành phần nào'],
+  authn:['Xác thực: SSO, IdP, MFA',true,'IdP, giao thức SSO, MFA, phiên đăng nhập'],
+  authz:['Phân quyền: RBAC/ABAC, policy engine, ACL',true,'Mô hình quyền, ACL tài liệu theo quyền gốc, scope OAuth'],
+  database:['CSDL quan hệ hoặc NoSQL',true,'Engine, cấu hình HA, kích thước, dữ liệu gì'],
+  vector_db:['Vector DB, search index',true,'Engine, số vector, lọc kết quả theo quyền'],
+  object_storage:['Lưu trữ file, workspace riêng',true,'Tách workspace từng user, quota, lifecycle'],
+  cache_queue:['Cache, hàng đợi tác vụ agent',true,'Cache phiên và kết quả, hàng đợi cho agent chạy nền'],
+  sandbox:['Sandbox chạy code và tác vụ agent',true,'Công nghệ cô lập, giới hạn tài nguyên, egress, vòng đời'],
+  connectors:['Tích hợp Google Workspace, M365, Notion, Jira, Confluence',true,'Cách gọi API từng SaaS, webhook, rate limit, lưu token'],
+  secrets_kms:['Secrets, KMS, token vault',true,'Khóa mã hóa, nơi lưu secret và OAuth token, xoay khóa'],
+  backup_dr:['Backup, DR',true,'Lịch backup, nơi lưu, RTO và RPO, diễn tập khôi phục'],
+  monitoring:['Log, metric, trace, LLM observability',true,'Đo gì, cảnh báo gì, chi phí theo user và đơn vị'],
+  governance:['AI và data governance',true,'Guardrail, chống prompt injection, DLP, audit, eval gate'],
+  network:['VPC, NAT, egress, WAF, private endpoint',true,'Subnet riêng, kiểm soát egress, WAF, private endpoint tới API model'],
+  cicd:['CI/CD, registry, IaC, staging',true,'Pipeline, registry, IaC, môi trường staging'],
+  ops_labor:['Nhân sự vận hành (FTE)',true,'Số FTE, ca trực, phụ trách gì'],
+  licenses:['Giấy phép, SaaS, gói support',false,'Gói support của cloud, license phần mềm'],
+  contingency:['Dự phòng',false,'Vì sao cần, tính trên phần nào'],
+  other:['Khác',false,'']
+};
+const REQUIRED_COMPONENTS = Object.keys(COMPONENTS).filter(k => COMPONENTS[k][1]);
+const NO_EVIDENCE = new Set(['ops_labor','contingency']);
+const EVID_RE = /^E\d{2,3}$/, URL_RE = /^https?:\/\/\S+$/, PLACEHOLDER_URL_RE = /^https?:\/\/(www\.)?example\.(com|org)/i;
+const NUM_RE = /^\d+(\.\d+)?$/, EXAMPLE_RE = /^\[VÍ DỤ\]/i, INCLUDED_RE = /included|nằm trong|đã bao gồm|bao gồm trong/iu;
+const DIGIT_RE = /\d/;
+const TRIAL_RE = /free[\s_-]*tier|free[\s_-]*trial|\btrial\b|free[\s_-]*credits?|promo(?:tional)?[\s_-]*credits?|startup[\s_-]*credits?|miễn[\s_-]*phí|dùng[\s_-]*thử|khuyến[\s_-]*mãi/iu;
+const HA_RE = /multi[\s_-]*az|\bha\b|high[\s_-]*availability|replica|standby|failover|\bzones?\b|đa vùng|dự phòng nóng/iu;
+const STAGING_RE = /staging|\bstage\b|non[\s_-]*prod/iu;
+
+function normalizeHeader(s){ return String(s).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, ''); }
+function headerKey(s){
+  const h = normalizeHeader(s);
+  if(['component','thanhphan','tencomponent'].includes(h)) return 'component';
+  if(h === 'ynghia') return 'y_nghia';
+  if(h === 'ghichu') return 'ghi_chu';
+  if(h.startsWith('chiphi')) return 'chi_phi';
+  if(['bangchung','evidence'].includes(h)) return 'bang_chung';
+  return null;
+}
+function pad2(n){ return String(n).padStart(2, '0'); }
+function normCell(XLSX, cell){
+  if(!cell || cell.v === undefined || cell.v === null) return '';
+  if(cell.t === 'd' && cell.v instanceof Date) return cell.v.getUTCFullYear() + '-' + pad2(cell.v.getUTCMonth()+1) + '-' + pad2(cell.v.getUTCDate());
+  if(cell.t === 'n'){
+    if(cell.z && XLSX.SSF.is_date(cell.z)){ const p = XLSX.SSF.parse_date_code(cell.v); return p.y + '-' + pad2(p.m) + '-' + pad2(p.d); }
+    return cell.v;
+  }
+  if(cell.t === 'b') return cell.v ? 'TRUE' : 'FALSE';
+  if(cell.t === 'e') return String(cell.w || '#ERROR');
+  return String(cell.v).trim();
+}
+function sheetRows(XLSX, ws, minRow){
+  if(!ws || !ws['!ref']) return [];
+  const rg = XLSX.utils.decode_range(ws['!ref']); const rows = [];
+  for(let r = Math.max(rg.s.r, (minRow || 1) - 1); r <= rg.e.r; r++){
+    const cells = [];
+    for(let c = 0; c <= rg.e.c; c++) cells.push(normCell(XLSX, ws[XLSX.utils.encode_cell({r, c})]));
+    while(cells.length && cells[cells.length-1] === '') cells.pop();
+    if(cells.length) rows.push({line: r + 1, cells});
+  }
+  return rows;
+}
+/* Workbook (from XLSX.read(data,{type:'array',cellNF:true})) -> {rows, evidenceIds} */
+function workbookToInput(XLSX, wb){
+  const rows = wb.SheetNames.includes(SHEET_QUOTE) ? sheetRows(XLSX, wb.Sheets[SHEET_QUOTE], 1) : [];
+  let evidenceIds = null;
+  if(wb.SheetNames.includes(SHEET_EVIDENCE)){
+    evidenceIds = sheetRows(XLSX, wb.Sheets[SHEET_EVIDENCE], 2).map(r => String(r.cells[0] === undefined ? '' : r.cells[0]).trim()).filter(Boolean);
+  }
+  return {rows, evidenceIds, sheets: wb.SheetNames};
+}
+
+function validateQuote(rows, evidenceIds){
+  const errors = [], warnings = [];
+  const E = (line, col, msg) => errors.push({line, col, msg});
+  const W = (line, col, msg) => warnings.push({line, col, msg});
+  const out = {errors, warnings, summary:null, ok:false, items:[]};
+  if(!rows || !rows.length){ E(0, '', "Không có sheet '" + SHEET_QUOTE + "' hoặc sheet trống."); return out; }
+  const s = v => typeof v === 'string' ? v : (v === '' || v === undefined || v === null ? '' : String(v));
+
+  const headLine = rows[0].line, pos = {}, unknown = [];
+  rows[0].cells.forEach((h, j) => {
+    const hs = s(h);
+    if(hs.trim() === '') return;
+    const k = headerKey(hs);
+    if(k === null) unknown.push(hs.trim());
+    else if(k in pos) E(headLine, 'header', 'Cột "' + LABEL[k] + '" xuất hiện hai lần.');
+    else pos[k] = j;
+  });
+  const missing = KEYS.filter(k => !(k in pos)).map(k => LABEL[k]);
+  if(missing.length) E(headLine, 'header', 'Thiếu cột: ' + missing.join(', ') + '. Dòng đầu phải là: ' + KEYS.map(k => LABEL[k]).join(' | ') + '.');
+  if(unknown.length) E(headLine, 'header', 'Cột không có trong đề: ' + unknown.join(', ') + '.');
+  if(errors.length) return out;
+
+  const used = new Set(Object.values(pos));
+  const data = rows.slice(1).map(r => {
+    const o = {line: r.line};
+    KEYS.forEach(k => { const j = pos[k]; const v = j < r.cells.length ? r.cells[j] : ''; o[k] = typeof v === 'string' ? v.trim() : v; });
+    o.extra = r.cells.some((v, j) => !used.has(j) && s(v) !== '');
+    return o;
+  });
+  const items = data.filter(r => s(r.component).toUpperCase() !== 'TOTAL');
+  const totals = data.filter(r => s(r.component).toUpperCase() === 'TOTAL');
+
+  const num = r => {
+    const v = r.chi_phi; let x;
+    if(typeof v === 'number') x = v;
+    else if(typeof v === 'string' && NUM_RE.test(v)) x = Number(v);
+    else {
+      const sv = s(v); let hint = '';
+      if(/[$đ₫]|usd|vnd/i.test(sv)) hint = ' Bỏ ký hiệu tiền tệ.';
+      else if(/,/.test(sv)) hint = ' Bỏ dấu phân cách hàng nghìn, dùng dấu chấm cho phần thập phân.';
+      else if(sv === '') hint = ' Ô đang trống (nếu là công thức: mở và lưu lại bằng Excel hoặc Google Sheets).';
+      E(r.line, LABEL.chi_phi, 'Phải là số USD, ví dụ 1250.50 (đang là "' + sv + '").' + hint);
+      return null;
+    }
+    if(x < 0){ E(r.line, LABEL.chi_phi, 'Không được âm.'); return null; }
+    return x;
+  };
+
+  const evSet = new Set(evidenceIds || []), evUsed = new Set();
+  let subtotal = 0, labor = 0, maxItem = {name:'', cost:0};
+  const byComp = {}, seen = new Map(), textAll = [];
+
+  items.forEach(r => {
+    const L = r.line;
+    if(r.extra) E(L, '', 'Dòng có dữ liệu ở cột ngoài 5 cột của đề. Xóa các ô thừa.');
+    const comp = s(r.component);
+    if(!Object.prototype.hasOwnProperty.call(COMPONENTS, comp)) E(L, LABEL.component, '"' + comp + '" không thuộc danh sách. Chọn trong dropdown: ' + Object.keys(COMPONENTS).join(', ') + '.');
+    const yn = s(r.y_nghia), gc = s(r.ghi_chu);
+    if(yn === '') E(L, LABEL.y_nghia, 'Ghi hạng mục này là gì, dùng để làm gì.');
+    const cost = num(r);
+    if(gc.length < 15) E(L, LABEL.ghi_chu, 'Ghi dịch vụ hoặc SKU, region và cách tính chi phí (ít nhất 15 ký tự).');
+    else if(cost !== 0 && !DIGIT_RE.test(gc)) W(L, LABEL.ghi_chu, 'Ghi chú chưa có con số. Nên ghi cách tính: đơn giá × số lượng.');
+    if(EXAMPLE_RE.test(yn) || EXAMPLE_RE.test(gc)) E(L, LABEL.y_nghia, 'Còn dòng ví dụ của file mẫu. Thay nội dung hoặc xóa dòng.');
+    if(cost === 0 && !INCLUDED_RE.test(gc)) E(L, LABEL.chi_phi, 'Chi phí bằng 0 chỉ dùng cho hạng mục đã nằm trong dòng khác: ghi chú phải nói rõ "nằm trong" dịch vụ nào.');
+    if(comp === 'ops_labor' && cost !== null) labor += cost;
+    const ev = s(r.bang_chung);
+    const refs = ev.split(';').map(t => t.trim()).filter(Boolean);
+    if(!NO_EVIDENCE.has(comp) && !refs.length) E(L, LABEL.bang_chung, 'Thiếu bằng chứng: link (trang giá, bản tính giá đã lưu, ảnh) hoặc mã ảnh E01… trong sheet ' + SHEET_EVIDENCE + '.');
+    refs.forEach(t => {
+      if(t.toUpperCase() === 'NA' && NO_EVIDENCE.has(comp)) return;
+      if(EVID_RE.test(t)){
+        evUsed.add(t);
+        if(evidenceIds === null) E(L, LABEL.bang_chung, 'Dùng mã ' + t + ' nhưng file không có sheet ' + SHEET_EVIDENCE + '.');
+        else if(!evSet.has(t)) E(L, LABEL.bang_chung, 'Mã ' + t + ' không có trong cột A của sheet ' + SHEET_EVIDENCE + '.');
+      } else if(URL_RE.test(t)){
+        if(PLACEHOLDER_URL_RE.test(t)) E(L, LABEL.bang_chung, 'example.com chỉ là link mẫu.');
+      } else E(L, LABEL.bang_chung, '"' + t + '" không phải link http(s) hay mã ảnh E01….');
+    });
+    if(TRIAL_RE.test([yn, gc, ev].join(' '))) E(L, LABEL.ghi_chu, 'Có dấu hiệu free tier, dùng thử hoặc credit khuyến mãi. Báo giá enterprise phải dùng giá niêm yết trả phí.');
+    textAll.push(yn + ' ' + gc);
+    if(cost !== null){
+      subtotal += cost;
+      byComp[comp] = (byComp[comp] || 0) + cost;
+      if(cost > maxItem.cost) maxItem = {name: yn, cost};
+    }
+    const key = (comp + '|' + yn).toLowerCase();
+    if(yn && seen.has(key)) W(L, LABEL.y_nghia, 'Trùng hạng mục với dòng ' + seen.get(key) + '. Kiểm tra có tính hai lần không.');
+    else if(yn) seen.set(key, L);
+    out.items.push({line: L, component: comp, y_nghia: yn, ghi_chu: gc, chi_phi: cost, bang_chung: ev});
+  });
+
+  let totalVal = null;
+  if(!totals.length) E(0, 'TOTAL', 'Thiếu dòng cuối có Component = TOTAL.');
+  else {
+    if(totals.length > 1) E(totals[1].line, LABEL.component, 'Chỉ được có 1 dòng TOTAL.');
+    const t = totals[0];
+    if(t !== data[data.length-1]) E(t.line, LABEL.component, 'Dòng TOTAL phải là dòng cuối cùng của sheet.');
+    totalVal = num(t);
+  }
+  if(items.length > MAX_ROWS) E(0, '', 'Tối đa ' + MAX_ROWS + ' dòng chi phí, hiện có ' + items.length + '.');
+  const present = new Set(items.map(r => s(r.component)));
+  const lack = REQUIRED_COMPONENTS.filter(c => !present.has(c));
+  if(lack.length) E(0, LABEL.component, 'Thiếu thành phần hạ tầng bắt buộc: ' + lack.join(', ') + '.');
+  if(totalVal !== null && Math.abs(totalVal - subtotal) > Math.max(0.05, 0.001 * subtotal)) E(totals[0].line, LABEL.chi_phi, 'TOTAL ghi ' + totalVal + ' nhưng tổng các dòng là ' + subtotal.toFixed(2) + '.');
+
+  const joined = textAll.join(' ');
+  if(items.length >= 3 && !STAGING_RE.test(joined)) W(0, '', 'Không thấy hạng mục nào nhắc tới staging. Đề yêu cầu prod và 1 staging.');
+  if(items.length >= 3 && !HA_RE.test(joined)) W(0, '', 'Không thấy hạng mục nào nhắc tới HA (multi-AZ, replica, standby). Kiểm tra lại số lượng cho tính sẵn sàng cao.');
+  if(items.length && !present.has('embedding')) W(0, LABEL.component, 'Chưa có dòng embedding. Nếu embedding nằm trong dòng llm, ghi rõ trong ghi chú.');
+  if(subtotal > 0 && maxItem.cost / subtotal > 0.6) W(0, '', 'Hạng mục "' + maxItem.name + '" chiếm ' + (maxItem.cost / subtotal * 100).toFixed(0) + '% tổng. Hội đồng sẽ hỏi kỹ sizing của dòng này.');
+  if(evidenceIds && evidenceIds.length){
+    const unused = evidenceIds.filter(e => !evUsed.has(e));
+    if(unused.length) W(0, LABEL.bang_chung, 'Mã bằng chứng không được dòng nào dùng: ' + unused.join(', ') + '.');
+  }
+  out.summary = {rows: items.length, subtotal: Math.round(subtotal * 100) / 100, total: totalVal, perDau: subtotal / DAU, laborUsd: labor,
+    byComponent: byComp, missingComponents: lack, evidenceIds};
+  out.ok = errors.length === 0;
+  return out;
+}
+/*VALIDATOR-END*/
+
+/* ===== dữ liệu hiển thị ===== */
+const COLSPEC = [
+  ['Component','Mã component, chọn trong dropdown (bảng Thành phần). Dòng cuối ghi TOTAL.','sandbox'],
+  ['Ý nghĩa','Hạng mục này là gì, dùng để làm gì.','Node pool chạy sandbox cho code của agent'],
+  ['Ghi chú','Dịch vụ hoặc SKU, region, cách tính (đơn giá × số lượng), giả định sizing, HA, staging. Tối thiểu 15 ký tự.','4 node (2 mỗi AZ) × 730 giờ × 0,20 USD, gVisor'],
+  ['Chi phí/tháng (USD)','Số, dấu chấm thập phân, được dùng công thức. Bằng 0 chỉ khi đã nằm trong dòng khác. TOTAL: tổng các dòng.','584'],
+  ['Bằng chứng','Link (trang giá, bản tính giá đã lưu, ảnh) hoặc mã ảnh E01… trong BangChung; nhiều mục cách nhau bằng ";". ops_labor và contingency ghi NA.','E02; https://calculator.aws/#/estimate?id=…']
+];
+const LANES = [
+  {id:'model', title:'Model serving', who:'Model serving', qs:[
+    'Mỗi người gửi bao nhiêu request một ngày, mỗi request bao nhiêu token vào và ra? Căn cứ ở đâu?',
+    'Mỗi cấp tác vụ dùng model nào, model tham chiếu để so chất lượng là gì?',
+    'API, tự host hay hybrid? Điểm hòa vốn nằm ở lượng token nào?',
+    'Cần bao nhiêu token/giây giờ cao điểm, phủ bằng bao nhiêu GPU hoặc bao nhiêu token API?',
+    'Sinh ảnh cho cấp 5 dùng dịch vụ nào, giá mỗi ảnh?'
+  ]},
+  {id:'data', title:'Data và workspace', who:'Data và workspace', qs:[
+    'Connector gọi API trực tiếp khi cần hay đồng bộ trước vào index? Đánh đổi chi phí và độ tươi?',
+    'Kết quả tìm kiếm được lọc theo quyền gốc của tài liệu ở bước nào?',
+    'Workspace riêng tách bằng gì: bucket, prefix, khóa mã hóa riêng?',
+    'Hàng đợi cho agent chạy nền, retry và hủy tác vụ ra sao?'
+  ]},
+  {id:'sec', title:'Sandbox và governance', who:'Sandbox, bảo mật, governance', qs:[
+    'Sandbox dùng công nghệ gì, chạy ở đâu, mỗi tháng bao nhiêu lượt và tốn bao nhiêu?',
+    'OAuth token của connector cất ở đâu, ai giải mã được?',
+    'Chặn prompt injection từ email và tài liệu thế nào? Hành động nào cần người dùng xác nhận?',
+    'Audit log ghi những gì, giữ ở đâu, ai xem được?'
+  ]},
+  {id:'cloud', title:'Cloud, HA, vận hành', who:'Cloud, HA, vận hành', qs:[
+    'Thành phần nào chạy nhiều AZ, thành phần nào một AZ, vì sao?',
+    'Ngoài giờ hành chính scale xuống tới đâu?',
+    'Egress, NAT, private endpoint, WAF tốn bao nhiêu?',
+    'Backup đặt ở đâu, diễn tập khôi phục bao lâu một lần?'
+  ]}
+];
+const SLIDE_CHK = [
+  'Có slide ước lượng tải từ 2.000 DAU, kèm công thức, khớp báo giá',
+  'Tối đa 15 slide nội dung, PPTX hoặc PDF, dưới 10 MB',
+  'Sơ đồ có đủ component bắt buộc, mỗi hộp ghi mã component',
+  'Có luồng một request đầu cuối, kể cả connector và sandbox',
+  'Có so sánh phương án và lý do chọn model, công nghệ chính',
+  'Nêu rõ cách cô lập workspace và sandbox (H3)',
+  'Nêu HA, backup, RTO và RPO (H7)',
+  'Tổng USD/tháng và USD/DAU bằng dòng TOTAL trong báo giá',
+  'Có đòn bẩy tiết kiệm kèm số USD'
+];
+const RUBRIC = [
+  {t:'Kiến trúc và độ phủ thành phần', p:25, d:'1 điểm cho mỗi component bắt buộc và HA có mặt trên sơ đồ, trong báo giá, mô tả đủ; 5 điểm cho luồng đầu cuối hợp lý.'},
+  {t:'Báo giá, bằng chứng và ước lượng tải', p:20, d:'Định dạng đạt; bằng chứng đủ, đọc được, khớp chi phí ghi trong báo giá; ước lượng tải từ 2.000 DAU hợp lý, có công thức và khớp báo giá; không bỏ sót egress, staging, backup, log.'},
+  {t:'Hiệu quả chi phí', p:20, d:'20 × (tổng thấp nhất ÷ tổng của nhóm), chỉ trọn điểm khi qua cổng chất lượng.'},
+  {t:'Bảo mật, sandbox, governance', p:15, d:'Sandbox 5, định danh và phân quyền kể cả token connector 5, AI và data governance 5.'},
+  {t:'Lý do chọn công nghệ và model', p:10, d:'So sánh ít nhất 2 phương án có số liệu; routing và cách đo chất lượng.'},
+  {t:'Trình bày và hỏi đáp', p:10, d:'Rõ ràng, đúng 7 phút, trả lời được câu hỏi ở mọi mảng.'}
+];
+
+/* ===== tiện ích ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (n, d) => n.toLocaleString('vi-VN', {maximumFractionDigits: d == null ? 0 : d, minimumFractionDigits: d == null ? 0 : d});
+const usd = n => '$' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+function store(key, val){ try{ if(val === undefined){ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } localStorage.setItem(key, JSON.stringify(val)); }catch(e){ return null; } }
+async function copyText(text, msgEl, ok){
+  try{ await navigator.clipboard.writeText(text); msgEl.textContent = ok || 'Đã sao chép.'; }
+  catch(e){ msgEl.textContent = 'Trình duyệt chặn sao chép. Bôi đen khung mẫu và nhấn Ctrl/Cmd+C.'; }
+  setTimeout(() => { msgEl.textContent = ''; }, 3500);
+}
+
+/* ===== bảng component, spec, mẫu ===== */
+(function(){
+  $('#spec tbody').innerHTML = COLSPEC.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('');
+})();
+function templateTsv(){
+  const rows = [
+    ['llm','[VÍ DỤ] API model lớn cho tác vụ khó (cấp 4–5)','[VÍ DỤ] Nhà cung cấp X, region ap-southeast-1. Input: 900 triệu token × 3 USD/1M = 2.700; output: 100 triệu × 15 USD/1M = 1.500','4200','E01; https://example.com/pricing'],
+    ['sandbox','[VÍ DỤ] Node pool chạy sandbox gVisor cho code của agent','[VÍ DỤ] 2 node c-standard-4 × 2 AZ × 730 giờ × 0,20 USD/giờ; staging dùng chung pool nhỏ','584','E02'],
+    ['authz','[VÍ DỤ] Policy engine phân quyền','[VÍ DỤ] Tính năng có sẵn, chi phí nằm trong dòng gateway','0','E03'],
+    ['ops_labor','Kỹ sư vận hành nền tảng','[VÍ DỤ] 1 FTE SRE/MLOps, lương và chi phí đi kèm mỗi tháng','4000','NA'],
+    ['TOTAL','','','8784','']
+  ];
+  return [COLUMNS.map(c => c[1])].concat(rows).map(r => r.join('\t')).join('\n') + '\n';
+}
+if(document.getElementById('tpl')){
+  const tpl = templateTsv();
+  $('#tpl').textContent = tpl;
+  $('#tplCopy').addEventListener('click', () => copyText(tpl, $('#tplMsg'), 'Đã sao chép. Dán vào ô A1 của sheet BaoGia.'));
+}
+
+/* ===== trình kiểm tra ===== */
+function showResult(res){
+  let h = '';
+  if(res.ok) h += `<div class="verdict ok"><span class="big">ĐẠT</span><span>Định dạng và quy tắc báo giá đều đạt${res.warnings.length ? ', còn ' + res.warnings.length + ' cảnh báo nên xem' : ''}. Giám khảo vẫn kiểm từng ảnh bằng chứng.</span></div>`;
+  else h += `<div class="verdict bad"><span class="big">CHƯA ĐẠT</span><span>${res.errors.length} lỗi cần sửa${res.warnings.length ? ', ' + res.warnings.length + ' cảnh báo' : ''}. Sửa file rồi kiểm tra lại.</span></div>`;
+  const s = res.summary;
+  if(s){
+    h += `<div class="sum"><div><b>${s.total == null ? '?' : usd(s.total)}</b><span>TOTAL mỗi tháng</span></div><div><b>${usd(s.perDau)}</b><span>mỗi DAU mỗi tháng</span></div><div><b>${s.rows}</b><span>dòng chi phí</span></div><div><b>${REQUIRED_COMPONENTS.length - s.missingComponents.length}/${REQUIRED_COMPONENTS.length}</b><span>component bắt buộc</span></div></div>`;
+    const cats = Object.entries(s.byComponent).sort((a,b) => b[1] - a[1]);
+    if(cats.length && cats[0][1] > 0){
+      const mx = cats[0][1];
+      h += '<div class="bars" aria-label="Chi phí theo component">' + cats.map(([c,v]) => `<div class="brow"><span class="l">${esc(c)}</span><span class="track"><span class="fill" style="width:${(v/mx*100).toFixed(1)}%"></span></span><span class="v">${usd(v)} · ${s.subtotal ? (v/s.subtotal*100).toFixed(1) : 0}%</span></div>`).join('') + '</div>';
+    }
+  }
+  const li = (it, kind) => `<li><span class="tag ${kind === 'e' ? 'err' : 'warn'}">${kind === 'e' ? 'Lỗi' : 'Cảnh báo'}</span><span class="ln">${it.line ? 'dòng ' + it.line : 'cả file'}${it.col ? ' · ' + esc(it.col) : ''}</span><span>${esc(it.msg)}</span></li>`;
+  if(res.errors.length || res.warnings.length) h += '<ul class="issues">' + res.errors.map(e => li(e, 'e')).join('') + res.warnings.map(w => li(w, 'w')).join('') + '</ul>';
+  $('#result').innerHTML = h;
+}
+function readXlsx(file){
+  if(!file) return;
+  $('#fname').textContent = file.name;
+  if(!/\.xlsx$/i.test(file.name)){ $('#result').innerHTML = '<div class="verdict bad"><span class="big">CHƯA ĐẠT</span><span>Chỉ nhận file .xlsx. Trong Google Sheets: Tệp › Tải xuống › Microsoft Excel (.xlsx).</span></div>'; return; }
+  if(typeof XLSX === 'undefined'){ $('#result').innerHTML = '<p style="color:var(--err)">Không tải được thư viện đọc Excel. Kiểm tra mạng rồi tải lại trang.</p>'; return; }
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const wb = XLSX.read(new Uint8Array(fr.result), {type:'array', cellNF:true});
+      const inp = workbookToInput(XLSX, wb);
+      showResult(validateQuote(inp.rows, inp.evidenceIds));
+    }catch(e){ $('#result').innerHTML = '<div class="verdict bad"><span class="big">CHƯA ĐẠT</span><span>Không đọc được file: ' + esc(e.message) + '</span></div>'; }
+  };
+  fr.readAsArrayBuffer(file);
+}
+if(document.getElementById('drop')){
+  $('#xlsxFile').addEventListener('change', e => readXlsx(e.target.files[0]));
+  const drop = $('#drop');
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => readXlsx(e.dataTransfer && e.dataTransfer.files[0]));
+  $('#result').innerHTML = '<p style="color:var(--muted)">Chọn hoặc kéo thả file báo giá .xlsx của nhóm để xem kết quả.</p>';
+}
+
+/* ===== checklist, rubric, form ===== */
+function renderChecks(el, group, items){
+  const saved = store('vbot-checks-v2') || {};
+  el.innerHTML = items.map((t, i) => { const id = group + i; return `<li><label><input type="checkbox" id="chk-${id}" data-k="${id}" ${saved[id] ? 'checked' : ''}><span>${esc(t)}</span></label></li>`; }).join('');
+  el.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => { const s = store('vbot-checks-v2') || {}; s[inp.dataset.k] = inp.checked; store('vbot-checks-v2', s); }));
+}
+if(document.getElementById('lanes')){
+  $('#lanes').innerHTML = LANES.map(l => `<div class="card lane"><h3>${esc(l.title)}</h3><div class="who">phụ trách gợi ý: ${esc(l.who)}</div><ul class="chk" id="lane-${l.id}"></ul></div>`).join('');
+  LANES.forEach(l => renderChecks($('#lane-' + l.id), 'lane-' + l.id + '-', l.qs));
+  renderChecks($('#slideChk'), 'slide-', SLIDE_CHK);
+  $('#rubric').innerHTML = RUBRIC.map(r => `<div class="rrow"><b>${esc(r.t)}</b><span class="pts">${r.p}</span><div class="meter"><i style="width:${r.p / 25 * 100}%"></i></div><p>${esc(r.d)}</p></div>`).join('');
+  document.querySelectorAll('.formlink').forEach(a => { if(FORM_URL){ a.href = FORM_URL; a.target = '_blank'; a.rel = 'noopener'; a.removeAttribute('aria-disabled'); } });
+}
+</script>

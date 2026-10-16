@@ -1,0 +1,73 @@
+name: deploy
+
+# Runs after CI on main. The "production" environment requires a manual approval in GitHub
+# and is the only identity the AWS deploy role trusts (OIDC, no stored keys).
+on:
+  workflow_run:
+    workflows: [ci]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.out.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.4"
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: build quote + Lambda artifacts
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          pip install pyyaml openpyxl boto3
+          python quote/build_quote.py
+          (cd quote && npm ci && node check.mjs out/G03_baogia.xlsx)
+          python scripts/build.py
+      - name: terraform apply
+        working-directory: infra/envs/mvp
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tf.plan | tee plan.txt
+          { echo '### Applied plan'; echo '```'; grep -E '^Plan:|No changes|# .* (will|must) be' plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          terraform apply -input=false -no-color tf.plan
+      - name: database migrations
+        run: python scripts/migrate.py
+      - id: out
+        name: smoke test
+        working-directory: infra/envs/mvp
+        run: |
+          URL=$(terraform output -raw url)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          curl -fsS "${URL}api/health"
+          curl -fsS "${URL}api/config" > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' "${URL}api/me")" = "401"
+          echo "Deployed: $URL" >> "$GITHUB_STEP_SUMMARY"

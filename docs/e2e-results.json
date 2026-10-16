@@ -1,0 +1,111 @@
+{
+ "ran_at": "2026-10-16T11:58:21+0700",
+ "url": "https://s4cxct67qimymr2nezhjem7i6q0dwwum.lambda-url.us-east-1.on.aws",
+ "results": [
+  {
+   "check": "SSO: SRP + TOTP MFA sign-in returns Cognito ID tokens",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Public HTTPS: SPA served",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Auth: API rejects requests without token",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Auth: API rejects forged token",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "User profile + quota",
+   "pass": true,
+   "detail": "{\"user_id\":\"74e894e8-a061-7082-be2b-fd32595d0ebd\",\"email\":\"e2e-a@vbot.test\",\"groups\":[\"user\"],\"department\":\"qa\",\"quota\":"
+  },
+  {
+   "check": "Workspace: presigned upload + ingest (index)",
+   "pass": true,
+   "detail": "{\"chunks\":1,\"chars\":73}"
+  },
+  {
+   "check": "H3: user A sees own file",
+   "pass": true,
+   "detail": "[{\"id\":\"8a28e0b5-0045-47e6-aac9-f792d54bb6d9\",\"title\":\"du-an-phuong-hoang.txt\",\"source\":\"upload\",\"created_at\":\"2026-10-1"
+  },
+  {
+   "check": "H3: user B does not see A's file list",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "H3: user B cannot download A's file by id",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "H3: user B cannot ingest A's file by id",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Chat: SSE stream with tier routing (t1 -> Haiku 5.5)",
+   "pass": true,
+   "detail": "model=Claude Haiku 5.5"
+  },
+  {
+   "check": "RAG: A's question retrieves A's document",
+   "pass": true,
+   "detail": "['du-an-phuong-hoang.txt']"
+  },
+  {
+   "check": "LLM: model call (Bedrock access pending → explicit error to user)",
+   "pass": false,
+   "detail": "Bedrock từ chối: ValidationException: An error occurred (ValidationException) when calling the ConverseStream operation: Operation not allowed"
+  },
+  {
+   "check": "H3: B's search never returns A's document",
+   "pass": true,
+   "detail": "[]"
+  },
+  {
+   "check": "H4: injected document is quarantined, not sent to the model",
+   "pass": true,
+   "detail": "[{\"title\": \"email-doc-hai.txt\", \"why\": [\"Bỏ qua mọi hướng dẫn\", \"send all contracts to\"]}, {\"title\": \"email-doc-hai.txt\", \"why\": [\"Bỏ qua mọi hướng dẫn\", \"send "
+  },
+  {
+   "check": "Sandbox: pandas runs, XLSX saved to workspace",
+   "pass": true,
+   "detail": "12\nAWS creds visible: False\n"
+  },
+  {
+   "check": "H3: sandbox child process has no AWS credentials",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "H3: sandbox has no Internet / metadata access",
+   "pass": true,
+   "detail": "BLOCKED https://example.com URLError\nBLOCKED http://169.254.169.254/latest/meta-data/ URLError\n"
+  },
+  {
+   "check": "Sandbox: timeout enforced",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "Agent: plan step (needs model access)",
+   "pass": false,
+   "detail": "status=failed: {\"errorMessage\":\"Bedrock từ chối: ValidationException: An error occurred (ValidationException) when calling the ConverseStream operation: Operation not allowed\""
+  },
+  {
+   "check": "H8: per-user metering ledger",
+   "pass": true,
+   "detail": "18 requests, 0.02174 USD"
+  }
+ ]
+}
