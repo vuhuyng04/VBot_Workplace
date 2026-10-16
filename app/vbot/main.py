@@ -179,7 +179,8 @@ def chat(body: ChatIn, u: User = Depends(current_user)):
                 else:
                     usage_, usd = ev[1], ev[2]
                     answer = "".join(text)
-                    stats = {"input_tokens": usage_.input_tokens, "output_tokens": usage_.output_tokens,
+                    provider = ev[3] if len(ev) > 3 else "bedrock"
+                    stats = {"provider": "Amazon Bedrock" if provider == "bedrock" else "Claude API", "input_tokens": usage_.input_tokens, "output_tokens": usage_.output_tokens,
                              "cache_read": getattr(usage_, "cache_read_input_tokens", 0) or 0,
                              "cache_write": getattr(usage_, "cache_creation_input_tokens", 0) or 0,
                              "usd": round(usd, 6), "ttft_s": round(first or 0, 2), "total_s": round(time.time() - started, 2)}
@@ -197,7 +198,7 @@ def chat(body: ChatIn, u: User = Depends(current_user)):
                     yield _sse("usage", stats)
         except llm.ProviderUnavailable as e:
             log(level="error", msg="llm unavailable", error=str(e))
-            yield _sse("error", {"message": str(e), "hint": "Bedrock của account đang chờ AWS mở quyền truy cập model."})
+            yield _sse("error", {"message": str(e), "hint": "Bedrock của account đang chờ AWS mở quyền; chưa có Claude API key dự phòng."})
         except Exception as e:
             log(level="error", msg="chat failed", error=repr(e)[:500])
             yield _sse("error", {"message": "Lỗi khi gọi model, thử lại sau."})
@@ -398,13 +399,14 @@ def image(body: ImageIn, u: User = Depends(current_user)):
     if scan:
         raise HTTPException(400, "Prompt bị chặn bởi bộ lọc an toàn.")
     try:
-        png, usd, model = images.generate(body.prompt)
+        data, usd, model, mime = images.generate(body.prompt)
     except images.ImageUnavailable as e:
         raise HTTPException(503, str(e)) from e
-    doc_id = save_output(u, f"anh-{dt.datetime.now():%Y%m%d-%H%M%S}.png", png, "image")
+    ext = "svg" if mime == "image/svg+xml" else "png"
+    doc_id = save_output(u, f"anh-{dt.datetime.now():%Y%m%d-%H%M%S}.{ext}", data, "image")
     quota.record(u.user_id, u.department, "image", model, usd, tier="t5")
-    governance.audit(u.user_id, "image.generate", document_id=doc_id, usd=usd)
-    return {"document_id": doc_id, "usd": usd, "model": model, "b64": base64.b64encode(png).decode()}
+    governance.audit(u.user_id, "image.generate", document_id=doc_id, usd=usd, model=model)
+    return {"document_id": doc_id, "usd": usd, "model": model, "mime": mime, "b64": base64.b64encode(data).decode()}
 
 
 # ---------------------------------------------------------------- agent (tier 4)

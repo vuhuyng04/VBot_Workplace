@@ -39,9 +39,9 @@ variable "edge_enabled" {
   default     = false
 }
 variable "llm_provider" {
-  description = "bedrock (target architecture) | anthropic (first-party Claude API while Bedrock access is pending)"
+  description = "auto (Bedrock first, Claude API fallback when a key is set) | bedrock | anthropic"
   type        = string
-  default     = "bedrock"
+  default     = "auto"
 }
 variable "anthropic_api_key" {
   type      = string

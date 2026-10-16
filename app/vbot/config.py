@@ -26,7 +26,7 @@ class Settings:
     guardrail_version: str = ""
     sandbox_function: str = ""
     agent_state_machine: str = ""
-    llm_provider: str = "bedrock"           # bedrock | anthropic
+    llm_provider: str = "auto"              # bedrock | anthropic | auto (Bedrock, fallback Claude API)
     anthropic_secret_arn: str = ""
     google_client_id: str = ""
     google_secret_arn: str = ""

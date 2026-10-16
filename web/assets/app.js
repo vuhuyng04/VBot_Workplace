@@ -248,7 +248,7 @@ $("#agRuns").onclick = async e => {
 $("#btnImg").onclick = async () => {
   $("#btnImg").disabled = true; $("#imgOut").textContent = "Đang tạo…";
   try { const r = await api("/api/images", {method: "POST", body: JSON.stringify({prompt: $("#imgPrompt").value})});
-    $("#imgOut").innerHTML = `<p class="muted">${esc(r.model)} · ${usd(r.usd, 3)} · đã lưu vào workspace</p><img class="gen" src="data:image/png;base64,${r.b64}" alt="">`;
+    $("#imgOut").innerHTML = `<p class="muted">${esc(r.model)} · ${usd(r.usd, 3)} · đã lưu vào workspace</p><img class="gen" src="data:${r.mime || "image/png"};base64,${r.b64}" alt="Ảnh minh họa đã tạo">`;
   } catch (e) { $("#imgOut").textContent = e.message; }
   $("#btnImg").disabled = false;
 };

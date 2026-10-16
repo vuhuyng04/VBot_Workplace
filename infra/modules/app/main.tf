@@ -26,7 +26,7 @@ variable "data" {
 variable "guardrail" { type = object({ id = string, version = string }) }
 variable "llm_provider" {
   type    = string
-  default = "bedrock"
+  default = "auto"
 }
 variable "anthropic_api_key" {
   description = "Optional: first-party Claude API key, used only when llm_provider = anthropic"
@@ -47,6 +47,8 @@ locals {
   lwa      = "arn:aws:lambda:${data.aws_region.current.region}:753240598075:layer:LambdaAdapterLayerArm64:25"
   sm_arn   = "arn:aws:states:${data.aws_region.current.region}:${data.aws_caller_identity.me.account_id}:stateMachine:${local.prefix}-agent"
   cfg_name = "/${var.name}/${var.env}/config"
+  # whether a key exists is not secret; the key itself stays sensitive
+  has_anthropic = nonsensitive(var.anthropic_api_key != "")
 }
 
 # ---------------- artifacts ----------------
@@ -100,7 +102,7 @@ resource "aws_secretsmanager_secret_version" "db_app" {
 }
 
 resource "aws_secretsmanager_secret" "anthropic" {
-  count                   = var.anthropic_api_key != "" ? 1 : 0
+  count                   = local.has_anthropic ? 1 : 0
   name                    = "${local.prefix}/llm/anthropic"
   kms_key_id              = var.data.kms_key_arns["oauth"]
   recovery_window_in_days = 0
@@ -108,7 +110,7 @@ resource "aws_secretsmanager_secret" "anthropic" {
 }
 
 resource "aws_secretsmanager_secret_version" "anthropic" {
-  count         = var.anthropic_api_key != "" ? 1 : 0
+  count         = local.has_anthropic ? 1 : 0
   secret_id     = aws_secretsmanager_secret.anthropic[0].id
   secret_string = var.anthropic_api_key
 }
@@ -134,7 +136,7 @@ resource "aws_ssm_parameter" "config" {
     sandbox_function      = "${local.prefix}-sandbox"
     agent_state_machine   = local.sm_arn
     llm_provider          = var.llm_provider
-    anthropic_secret_arn  = var.anthropic_api_key != "" ? aws_secretsmanager_secret.anthropic[0].arn : ""
+    anthropic_secret_arn  = local.has_anthropic ? aws_secretsmanager_secret.anthropic[0].arn : ""
     daily_user_budget_usd = 2.0
   })
   tags = { component = "compute" }

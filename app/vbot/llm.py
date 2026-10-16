@@ -79,13 +79,19 @@ def route(text: str, mode: str | None = None) -> Route:
     return Route(tier, "sonnet", "low", "thiết kế: Sonnet + ảnh")
 
 
-def cost_usd(model: str, usage) -> float:
+# First-party Claude API list prices (USD / 1M tokens), used when the request ran there.
+PRICES_1P = {
+    "haiku": {"in": 0.10, "out": 0.50, "cache_read": 0.01, "cache_write": 0.125},
+    "sonnet": {"in": 2.00, "out": 10.00, "cache_read": 0.20, "cache_write": 2.50},
+}
+
+
+def cost_usd(model: str, usage, provider: str = "bedrock") -> float:
     def p(k):
+        if provider == "anthropic":
+            return PRICES_1P[model][k] / 1e6
         return PRICES[f"{model}_{k}"]["usd"] / 1e6
-    return (getattr(usage, "input_tokens", 0) or 0) * p("in") \
-        + (getattr(usage, "output_tokens", 0) or 0) * p("out") \
-        + (getattr(usage, "cache_read_input_tokens", 0) or 0) * p("cache_read") \
-        + (getattr(usage, "cache_creation_input_tokens", 0) or 0) * p("cache_write")
+    return (getattr(usage, "input_tokens", 0) or 0) * p("in")         + (getattr(usage, "output_tokens", 0) or 0) * p("out")         + (getattr(usage, "cache_read_input_tokens", 0) or 0) * p("cache_read")         + (getattr(usage, "cache_creation_input_tokens", 0) or 0) * p("cache_write")
 
 
 class ProviderUnavailable(RuntimeError):
@@ -108,10 +114,6 @@ def _anthropic():
     return anthropic.Anthropic(api_key=secret(s.anthropic_secret_arn), max_retries=2)
 
 
-def model_id(model: str) -> str:
-    return MODELS[model]["anthropic" if settings().llm_provider == "anthropic" else "bedrock"]
-
-
 def _stream_bedrock(model, messages, system_text, extra_system, max_tokens):
     from .aws import client
     system = [{"text": system_text}, {"cachePoint": {"type": "default"}}]
@@ -119,7 +121,7 @@ def _stream_bedrock(model, messages, system_text, extra_system, max_tokens):
         system.append({"text": extra_system})
     msgs = [{"role": m["role"], "content": [{"text": m["content"]}]} for m in messages]
     try:
-        r = client("bedrock-runtime").converse_stream(modelId=model_id(model), system=system, messages=msgs,
+        r = client("bedrock-runtime").converse_stream(modelId=MODELS[model]["bedrock"], system=system, messages=msgs,
                                                       inferenceConfig={"maxTokens": max_tokens})
     except Exception as e:
         code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
@@ -139,7 +141,7 @@ def _stream_bedrock(model, messages, system_text, extra_system, max_tokens):
             u = Usage(m.get("inputTokens", 0), m.get("outputTokens", 0), m.get("cacheReadInputTokens", 0), m.get("cacheWriteInputTokens", 0))
     if stop in ("guardrail_intervened", "content_filtered"):
         yield ("text", "\n\n_(Câu trả lời bị chặn theo chính sách.)_")
-    yield ("usage", u, cost_usd(model, u))
+    yield ("usage", u, cost_usd(model, u, "bedrock"), "bedrock")
 
 
 def _stream_anthropic(model, effort, messages, system_text, extra_system, max_tokens):
@@ -147,8 +149,8 @@ def _stream_anthropic(model, effort, messages, system_text, extra_system, max_to
     if extra_system:
         system.append({"type": "text", "text": extra_system})
     try:
-        with _anthropic().messages.stream(model=model_id(model), max_tokens=max_tokens, system=system, messages=messages,
-                                          output_config={"effort": effort}) as st:
+        with _anthropic().messages.stream(model=MODELS[model]["anthropic"], max_tokens=max_tokens, system=system,
+                                          messages=messages, output_config={"effort": effort}) as st:
             for text in st.text_stream:
                 yield ("text", text)
             final = st.get_final_message()
@@ -156,15 +158,34 @@ def _stream_anthropic(model, effort, messages, system_text, extra_system, max_to
         raise ProviderUnavailable(f"Claude API từ chối: {e.message}") from e
     if final.stop_reason == "refusal":
         yield ("text", "\n\n_(Model từ chối yêu cầu này theo chính sách an toàn.)_")
-    yield ("usage", final.usage, cost_usd(model, final.usage))
+    yield ("usage", final.usage, cost_usd(model, final.usage, "anthropic"), "anthropic")
+
+
+_bedrock_down_until = 0.0  # after a refusal, skip Bedrock for a few minutes (auto mode)
 
 
 def stream(model: str, effort: str, messages: list[dict], extra_system: str = "", max_tokens: int = 8000):
-    """Yields ("text", str) chunks, then ("usage", usage, usd). The stable system prompt is cached."""
-    if settings().llm_provider == "anthropic":
+    """Yields ("text", str) chunks, then ("usage", usage, usd, provider).
+
+    llm_provider: "bedrock" | "anthropic" | "auto" (Bedrock first; when the account is refused,
+    fall back to the first-party Claude API if a key is configured, and retry Bedrock later)."""
+    global _bedrock_down_until
+    import time
+    s = settings()
+    mode = s.llm_provider
+    if mode == "anthropic":
         yield from _stream_anthropic(model, effort, messages, SYSTEM_PROMPT, extra_system, max_tokens)
-    else:
+        return
+    if mode == "auto" and time.time() < _bedrock_down_until and s.anthropic_secret_arn:
+        yield from _stream_anthropic(model, effort, messages, SYSTEM_PROMPT, extra_system, max_tokens)
+        return
+    try:
         yield from _stream_bedrock(model, messages, SYSTEM_PROMPT, extra_system, max_tokens)
+    except ProviderUnavailable:
+        if mode != "auto" or not s.anthropic_secret_arn:
+            raise
+        _bedrock_down_until = time.time() + 300
+        yield from _stream_anthropic(model, effort, messages, SYSTEM_PROMPT, extra_system, max_tokens)
 
 
 def complete(model: str, effort: str, messages: list[dict], extra_system: str = "", max_tokens: int = 4000):
