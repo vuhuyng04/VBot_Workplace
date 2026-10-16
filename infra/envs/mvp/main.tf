@@ -93,9 +93,10 @@ module "app" {
     db_cluster_arn       = module.data.db_cluster_arn
     kms_key_arns         = module.data.kms_key_arns
   }
-  guardrail         = { id = module.llm.guardrail_id, version = module.llm.guardrail_version }
-  llm_provider      = var.llm_provider
-  anthropic_api_key = var.anthropic_api_key
+  guardrail              = { id = module.llm.guardrail_id, version = module.llm.guardrail_version }
+  llm_provider           = var.llm_provider
+  anthropic_api_key      = var.anthropic_api_key
+  anthropic_workspace_id = var.anthropic_workspace_id
 }
 
 module "observability" {

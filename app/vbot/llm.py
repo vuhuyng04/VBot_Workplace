@@ -111,7 +111,8 @@ def _anthropic():
     s = settings()
     if not s.anthropic_secret_arn:
         raise ProviderUnavailable("Chưa cấu hình Claude API key")
-    return anthropic.Anthropic(api_key=secret(s.anthropic_secret_arn), max_retries=2)
+    headers = {"anthropic-workspace-id": s.anthropic_workspace_id} if s.anthropic_workspace_id else None
+    return anthropic.Anthropic(api_key=secret(s.anthropic_secret_arn), max_retries=2, default_headers=headers)
 
 
 def _stream_bedrock(model, messages, system_text, extra_system, max_tokens):

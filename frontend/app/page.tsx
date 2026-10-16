@@ -4,9 +4,10 @@
 import { useEffect, useState } from "react";
 import { api, errMsg, setToken } from "@/lib/api";
 import { handleCallback, login, logout, validToken, type Config } from "@/lib/auth";
-import { AppBar, USER_TABS, type Me, type Tab } from "@/components/AppBar";
+import { AppBar, USER_TABS, isAdmin, type Me, type Tab } from "@/components/AppBar";
 import { Hero } from "@/components/Hero";
 import { ToastProvider, useToast } from "@/components/Toasts";
+import { Admin } from "@/views/Admin";
 import { Agent } from "@/views/Agent";
 import { Chat } from "@/views/Chat";
 import { Files } from "@/views/Files";
@@ -15,7 +16,7 @@ import { Sandbox } from "@/views/Sandbox";
 import { Transparency } from "@/views/Transparency";
 import { UsageView } from "@/views/Usage";
 
-const TABS = new Set<string>([...USER_TABS.map(t => t[0]), "minh-bach"]);
+const TABS = new Set<string>([...USER_TABS.map(t => t[0]), "admin", "minh-bach"]);
 const readTab = (): Tab => { const t = (location.hash.match(/#\/([\w-]+)/) || [])[1] || "chat"; return (TABS.has(t) ? t : "chat") as Tab; };
 
 function Shell() {
@@ -64,13 +65,14 @@ function Shell() {
               <Agent active={tab === "agent"} />
               <Images active={tab === "image"} />
               <UsageView active={tab === "usage"} />
+              <Admin active={tab === "admin"} />
             </>}
             <Transparency active={tab === "minh-bach"} />
           </div>
         </main>
       )}
       <footer className="foot">
-        <div className="foot-in"><span><b>VBOT</b> WORKPLACE · Production Capstone · AI20k Track 2</span><span>Dữ liệu ở us-east-1 · không dùng để huấn luyện model</span></div>
+        <div className="foot-in"><span><b>VBot</b> Workplace · Production Capstone · AI20k Track 2</span><span>Dữ liệu ở us-east-1 · không dùng để huấn luyện model</span></div>
       </footer>
     </>
   );

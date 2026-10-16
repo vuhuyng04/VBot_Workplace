@@ -28,11 +28,12 @@ class Settings:
     agent_state_machine: str = ""
     llm_provider: str = "auto"              # bedrock | anthropic | auto (Bedrock, fallback Claude API)
     anthropic_secret_arn: str = ""
+    anthropic_workspace_id: str = ""        # needed when the key is user-level (sk-ant-usr-...), not workspace-scoped
     google_client_id: str = ""
     google_secret_arn: str = ""
     public_url: str = ""
-    daily_user_budget_usd: float = 2.0      # per-user cap; unit caps live in quota table
-    monthly_unit_budget_usd: float = 500.0
+    daily_user_budget_usd: float = 2.0      # per-user cap
+    monthly_unit_budget_usd: float = 500.0  # default per department; admins override it in the quota table
 
 
 @lru_cache

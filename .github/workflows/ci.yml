@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   python:
-    name: lint + import smoke
+    name: lint + API tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install ruff -r app/requirements.txt
+      - run: pip install ruff -r app/requirements-dev.txt
       - run: ruff check app sandbox scripts quote
       - name: import smoke (router, app routes)
         working-directory: app
@@ -31,6 +31,9 @@ jobs:
         run: |
           cp ../quote/prices.json vbot/prices.json
           python -c "from vbot import main, llm, agent_steps; assert len(main.app.routes) > 15; assert llm.route('Tóm tắt email').model == 'haiku'; print('ok')"
+      - name: API tests (moto fakes Cognito, DynamoDB, S3)
+        working-directory: app
+        run: python -m pytest tests -q
 
   quote:
     name: quote builds and passes the capstone validator
@@ -55,7 +58,7 @@ jobs:
           path: quote/out/
 
   frontend:
-    name: frontend typecheck + static build
+    name: frontend typecheck + build + UI tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,6 +76,13 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: test -f out/index.html && test -d out/_next/static
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: frontend/test-results/
 
   terraform:
     name: terraform fmt + validate
@@ -125,6 +135,7 @@ jobs:
         env:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
         run: |
           terraform init -input=false
           terraform plan -input=false -lock=false -no-color -out=tf.plan | tee plan.txt

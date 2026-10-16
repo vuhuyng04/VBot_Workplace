@@ -27,7 +27,7 @@ Vận hành: CloudWatch alarms + dashboard, SNS email, Budget $50, anomaly monit
 Bản prod trong báo giá dùng cùng các thành phần đó, cộng thêm ALB + ECS Fargate + NAT + WAF + CloudFront. Các phần này đã có module Terraform (`infra/modules/lb`, `edge`) và bật bằng `demo_mode` / `edge_enabled`.
 
 ## Trạng thái kiểm thử E2E (`python scripts/e2e.py`, kết quả ghi ở `docs/e2e-results.json`)
-19/21 check đạt:
+19/21 check đạt ở lần chạy gần nhất (trước khi có check RBAC của trang Quản trị, nay tổng cộng 22 check):
 - SSO + MFA, chặn request thiếu token hoặc token giả.
 - Upload, index, RAG.
 - Cô lập A/B: danh sách file, tải file, ingest, kết quả tìm kiếm.
@@ -43,10 +43,28 @@ Bản prod trong báo giá dùng cùng các thành phần đó, cộng thêm ALB
 
 Cách tạm thời: đặt `llm_provider = "anthropic"` và `anthropic_api_key = "..."` trong `terraform.tfvars` (key lưu trong Secrets Manager), rồi plan/apply.
 
+## Tài khoản và phân quyền
+Không cho tự đăng ký. Tài khoản đầu tiên tạo bằng `scripts/add_user.py email phongban --admin` (nhóm `platform_admin`). Từ đó quản trị qua tab **Quản trị** trên web:
+
+| Vai trò (nhóm Cognito) | Làm được |
+|---|---|
+| `user` | dùng VBot; không vào được trang Quản trị |
+| `unit_admin` | trong phòng ban của mình: thêm người dùng thường, khoá/mở khoá, gửi lại thư mời; xem chi phí phòng ban |
+| `platform_admin` | mọi phòng ban: thêm/sửa người dùng, đổi phòng ban và vai trò, đặt hạn mức tháng riêng cho từng phòng ban, đọc nhật ký audit |
+
+Vai trò và trạng thái khoá được kiểm tra trực tiếp với Cognito ở mỗi lời gọi `/api/admin/*`, nên hạ quyền hoặc khoá có hiệu lực ngay ở trang Quản trị. Các API thường vẫn tin ID token tới khi nó hết hạn (tối đa 60 phút); khi khoá hoặc đổi phòng ban, hệ thống thu hồi refresh token để người dùng phải đăng nhập lại. Mọi thao tác quản trị, kể cả việc đọc nhật ký, đều được ghi vào bucket audit (Object Lock).
+
+## Kiểm thử tự động
+```powershell
+cd app; ..\.venv\Scripts\python -m pytest tests -q        # API: RBAC quản trị, hạn mức, JWT, định tuyến model, governance, phục vụ SPA
+cd frontend; npm run build; npm run test:e2e                # UI: Playwright với API giả lập (đăng nhập, chat, xoá hai bước, quản trị, mobile)
+```
+Test API dùng moto giả lập Cognito, DynamoDB và S3 (`pip install -r app/requirements-dev.txt`). Phần cần Aurora Data API và model thật vẫn do `scripts/e2e.py` kiểm tra trên môi trường đã deploy.
+
 ## CI/CD (GitHub Actions, OIDC, không lưu access key)
 | Workflow | Khi nào | Làm gì |
 |---|---|---|
-| `ci` | mọi PR và push lên `main` | ruff + import smoke; build báo giá và chạy validator của đề; `terraform fmt`/`validate`; `terraform plan` bằng role chỉ đọc `vbot-github-plan` (kết quả ở Job summary) |
+| `ci` | mọi PR và push lên `main` | ruff + import smoke + test API (pytest, moto); typecheck, build và test UI (Playwright) cho `frontend/`; build báo giá và chạy validator của đề; `terraform fmt`/`validate`; `terraform plan` bằng role chỉ đọc `vbot-github-plan` (kết quả ở Job summary) |
 | `deploy` | sau khi `ci` xanh trên `main`, hoặc chạy tay | chờ duyệt ở environment **production**, sau đó assume `vbot-github-deploy`: build artifact, plan, apply, migrate, smoke test (`/api/health`, `/api/config`, `/api/me` trả 401) |
 
 Role deploy chỉ tin token OIDC của repo `vuhuyng04/VBot_Workplace` khi chạy trong environment `production` (Terraform: `infra/modules/cicd`).

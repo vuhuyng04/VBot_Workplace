@@ -28,8 +28,13 @@ variable "llm_provider" {
   type    = string
   default = "auto"
 }
+variable "anthropic_workspace_id" {
+  description = "Claude Console workspace (wrkspc_...) for user-level API keys; not a secret"
+  type        = string
+  default     = ""
+}
 variable "anthropic_api_key" {
-  description = "Optional: first-party Claude API key, used only when llm_provider = anthropic"
+  description = "Optional: first-party Claude API key (llm_provider = anthropic, or the fallback in auto)"
   type        = string
   default     = ""
   sensitive   = true
@@ -120,24 +125,25 @@ resource "aws_ssm_parameter" "config" {
   type = "String"
   tier = "Standard"
   value = jsonencode({
-    region                = data.aws_region.current.region
-    env                   = var.env
-    user_pool_id          = var.cognito.user_pool_id
-    client_id             = var.cognito.client_id
-    cognito_domain        = var.cognito.domain
-    db_cluster_arn        = var.data.db_cluster_arn
-    db_app_secret_arn     = aws_secretsmanager_secret.db_app.arn
-    workspace_bucket      = var.data.workspace_bucket
-    audit_bucket          = var.data.audit_bucket
-    tables                = var.data.table_names
-    kms_oauth_key         = var.data.kms_key_arns["oauth"]
-    guardrail_id          = var.guardrail.id
-    guardrail_version     = var.guardrail.version
-    sandbox_function      = "${local.prefix}-sandbox"
-    agent_state_machine   = local.sm_arn
-    llm_provider          = var.llm_provider
-    anthropic_secret_arn  = local.has_anthropic ? aws_secretsmanager_secret.anthropic[0].arn : ""
-    daily_user_budget_usd = 2.0
+    region                 = data.aws_region.current.region
+    env                    = var.env
+    user_pool_id           = var.cognito.user_pool_id
+    client_id              = var.cognito.client_id
+    cognito_domain         = var.cognito.domain
+    db_cluster_arn         = var.data.db_cluster_arn
+    db_app_secret_arn      = aws_secretsmanager_secret.db_app.arn
+    workspace_bucket       = var.data.workspace_bucket
+    audit_bucket           = var.data.audit_bucket
+    tables                 = var.data.table_names
+    kms_oauth_key          = var.data.kms_key_arns["oauth"]
+    guardrail_id           = var.guardrail.id
+    guardrail_version      = var.guardrail.version
+    sandbox_function       = "${local.prefix}-sandbox"
+    agent_state_machine    = local.sm_arn
+    llm_provider           = var.llm_provider
+    anthropic_secret_arn   = local.has_anthropic ? aws_secretsmanager_secret.anthropic[0].arn : ""
+    anthropic_workspace_id = var.anthropic_workspace_id
+    daily_user_budget_usd  = 2.0
   })
   tags = { component = "compute" }
 }
@@ -202,8 +208,26 @@ data "aws_iam_policy_document" "api" {
   }
   statement {
     sid       = "Audit"
-    actions   = ["s3:PutObject"]
+    actions   = ["s3:PutObject", "s3:GetObject"] # GetObject: admin audit viewer; Object Lock keeps records immutable
     resources = ["${var.data.audit_bucket_arn}/audit/*"]
+  }
+  statement {
+    sid       = "AuditList"
+    actions   = ["s3:ListBucket"]
+    resources = [var.data.audit_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["audit/*"]
+    }
+  }
+  statement {
+    sid = "UserAdmin" # admin console; the app checks platform_admin / unit_admin live against Cognito
+    actions = ["cognito-idp:ListUsers", "cognito-idp:ListUsersInGroup", "cognito-idp:AdminGetUser",
+      "cognito-idp:AdminListGroupsForUser", "cognito-idp:AdminCreateUser", "cognito-idp:AdminUpdateUserAttributes",
+      "cognito-idp:AdminAddUserToGroup", "cognito-idp:AdminRemoveUserFromGroup", "cognito-idp:AdminDisableUser",
+    "cognito-idp:AdminEnableUser", "cognito-idp:AdminUserGlobalSignOut"]
+    resources = [var.cognito.user_pool_arn]
   }
   statement {
     sid       = "Keys"

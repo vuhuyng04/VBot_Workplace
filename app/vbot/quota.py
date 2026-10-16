@@ -20,16 +20,48 @@ def _get(pk, sk) -> float:
     return float(r.get("Item", {}).get("usd", {}).get("N", "0"))
 
 
+_CAPS: dict[str, tuple[float, float | None]] = {}   # department -> (fetched_at, override); 60 s cache
+
+
+def unit_cap_override(department: str) -> float | None:
+    hit = _CAPS.get(department)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    r = client("dynamodb").get_item(TableName=settings().tables["quota"], Key={"pk": {"S": f"unit#{department}"}, "sk": {"S": "cap"}})
+    v = r.get("Item", {}).get("usd", {}).get("N")
+    _CAPS[department] = (time.time(), float(v) if v is not None else None)
+    return _CAPS[department][1]
+
+
+def unit_cap(department: str) -> float:
+    """Monthly budget of a department: the admin-set override, else the platform default."""
+    o = unit_cap_override(department)
+    return settings().monthly_unit_budget_usd if o is None else o
+
+
+def set_unit_cap(department: str, usd: float | None):
+    t, key = settings().tables["quota"], {"pk": {"S": f"unit#{department}"}, "sk": {"S": "cap"}}
+    if usd is None:
+        client("dynamodb").delete_item(TableName=t, Key=key)
+    else:
+        client("dynamodb").put_item(TableName=t, Item={**key, "usd": {"N": str(Decimal(str(round(usd, 4))))}})
+    _CAPS.pop(department, None)
+
+
+def unit_month_usd(department: str) -> float:
+    return _get(*_keys("-", department)[1])
+
+
 def check(user_id: str, department: str):
     s = settings()
     (upk, usk), (dpk, dsk) = _keys(user_id, department)
-    used_user, used_unit = _get(upk, usk), _get(dpk, dsk)
+    used_user, used_unit, cap = _get(upk, usk), _get(dpk, dsk), unit_cap(department)
     if used_user >= s.daily_user_budget_usd:
-        raise HTTPException(429, f"Đã dùng hết hạn mức {s.daily_user_budget_usd} USD hôm nay. Hạn mức đặt lại lúc 0h UTC.")
-    if used_unit >= s.monthly_unit_budget_usd:
+        raise HTTPException(429, f"Đã dùng hết hạn mức {s.daily_user_budget_usd} USD hôm nay. Hạn mức đặt lại lúc 07:00 (giờ Việt Nam).")
+    if used_unit >= cap:
         raise HTTPException(429, f"Đơn vị {department} đã dùng hết ngân sách tháng.")
     return {"user_today_usd": round(used_user, 4), "user_cap_usd": s.daily_user_budget_usd,
-            "unit_month_usd": round(used_unit, 4), "unit_cap_usd": s.monthly_unit_budget_usd}
+            "unit_month_usd": round(used_unit, 4), "unit_cap_usd": cap}
 
 
 def record(user_id: str, department: str, kind: str, model: str, usd: float, input_tokens: int = 0,

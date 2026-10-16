@@ -31,3 +31,5 @@ app/vbot/web/
 .next/
 frontend/next-env.d.ts
 frontend/tsconfig.tsbuildinfo
+test-results/
+playwright-report/

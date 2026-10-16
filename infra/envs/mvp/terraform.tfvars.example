@@ -3,3 +3,6 @@ aws_profile = "root"
 alert_email = "you@example.com"
 budget_usd  = 50
 demo_mode   = false
+# Claude API fallback while Bedrock is blocked (CI: secret ANTHROPIC_API_KEY, variable ANTHROPIC_WORKSPACE_ID)
+# anthropic_api_key      = "sk-ant-..."
+# anthropic_workspace_id = "wrkspc_..."   # only for user-level keys (sk-ant-usr-...)

@@ -183,6 +183,12 @@ for u in ['https://example.com', 'http://169.254.169.254/latest/meta-data/']:
     us = A.get("/api/usage").json()
     check("H8: per-user metering ledger", us["summary"]["requests"] >= 1, f"{us['summary']['requests']} requests, {us['summary']['usd']} USD")
 
+    adm = [A.get("/api/admin/users").status_code, A.get("/api/admin/audit").status_code,
+           # invalid body on purpose: RBAC (a dependency) answers 403 first; if it ever regressed this gets 422
+           # instead of creating a real Cognito user
+           A.post("/api/admin/users", json={"email": "not-an-email"}).status_code]
+    check("RBAC: plain user is refused by every admin endpoint", adm == [403, 403, 403], str(adm))
+
     passed = sum(ok for _, ok, _ in results)
     print(f"\n{passed}/{len(results)} checks passed")
     (ROOT / "docs").mkdir(exist_ok=True)

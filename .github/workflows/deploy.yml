@@ -55,6 +55,7 @@ jobs:
         env:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
         run: |
           terraform init -input=false
           terraform plan -input=false -no-color -out=tf.plan | tee plan.txt

@@ -43,6 +43,11 @@ variable "llm_provider" {
   type        = string
   default     = "auto"
 }
+variable "anthropic_workspace_id" {
+  description = "Claude Console workspace ID (wrkspc_...) used with a user-level API key"
+  type        = string
+  default     = ""
+}
 variable "anthropic_api_key" {
   type      = string
   default   = ""

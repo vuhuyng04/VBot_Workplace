@@ -12,13 +12,14 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import governance, images, llm, quota, rag
+from . import admin, governance, images, llm, quota, rag
 from .auth import User, current_user
 from .aws import client
 from .config import settings
 from .db import DatabaseWaking, user_tx
 
 app = FastAPI(title="VBot", docs_url=None, redoc_url=None)
+app.include_router(admin.router)
 
 
 @app.exception_handler(DatabaseWaking)
@@ -473,12 +474,21 @@ class ImmutableFiles(StaticFiles):
         return r
 
 
-if (WEB / "index.html").exists():
-    if (WEB / "_next").exists():
-        app.mount("/_next", ImmutableFiles(directory=WEB / "_next"), name="next")
+def mount_spa(target: FastAPI, web: pathlib.Path):
+    """Serve the exported SPA: /_next (hashed, immutable), real files at the export root, else index.html."""
+    if (web / "_next").exists():
+        target.mount("/_next", ImmutableFiles(directory=web / "_next"), name="next")
+    root = web.resolve()
 
-    @app.get("/{path:path}", include_in_schema=False)
+    @target.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
         if path.startswith("api/"):
             return JSONResponse({"detail": "not found"}, status_code=404)
-        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache"})
+        f = (web / path).resolve()
+        if path and f.is_file() and f.is_relative_to(root):  # e.g. /icon.svg; ../ escapes fall through
+            return FileResponse(f, headers={"Cache-Control": "public, max-age=86400"})
+        return FileResponse(web / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+if (WEB / "index.html").exists():
+    mount_spa(app, WEB)

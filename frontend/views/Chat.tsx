@@ -4,6 +4,7 @@ import { api, authHeader, del, errMsg, fetchWake } from "@/lib/api";
 import { num, toDate, usd } from "@/lib/format";
 import { Armed } from "@/components/Armed";
 import { Icon, type IconName } from "@/components/Icon";
+import { LogoMark } from "@/components/Logo";
 import { Markdown } from "@/components/Markdown";
 import { useToast } from "@/components/Toasts";
 
@@ -49,7 +50,7 @@ const Message = memo(function Message({ m, onCopy }: { m: Msg; onCopy: (t: strin
   if (m.role === "user") return <article className="msg user"><div className="bubble"><div className="body">{m.text}</div></div></article>;
   return (
     <article className="msg assistant">
-      <div className="avatar" aria-hidden="true" />
+      <LogoMark size={30} className="avatar" />
       <div className="bubble">
         <div className="body md">
           {m.streaming && !m.text ? <span className="typing" aria-label="VBot đang soạn"><i /><i /><i /></span> : <Markdown source={m.text} />}
@@ -236,7 +237,7 @@ export function Chat({ active }: { active: boolean }) {
           {loadingConv && <><div className="skeleton" /><div className="skeleton short" /></>}
           {!loadingConv && !msgs.length && (
             <div className="empty">
-              <span className="empty-mark" aria-hidden="true" />
+              <LogoMark size={56} className="empty-mark" />
               <h2>Hôm nay VBot giúp gì cho bạn?</h2>
               <p className="muted">VBot tự chọn model theo độ khó của việc và trả lời dựa trên tài liệu trong workspace của bạn.</p>
               <div className="chips">
